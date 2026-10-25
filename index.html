@@ -78,15 +78,36 @@ async function ask(q){
 
 function speak(t){
   speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
-  u.lang='it-IT';
-  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.startsWith('it'));
-  if(v)u.voice=v;
-  u.onstart=()=>setState('speaking');
-  u.onend=u.onerror=()=>setState('idle');
+  const u = new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
+  u.lang = 'it-IT';
+
+  const voices = speechSynthesis.getVoices();
+
+  // 1. Prova prima Luca
+  let v = voices.find(v => 
+    v.lang.startsWith('it') && 
+    /luca/i.test(v.name)
+  );
+
+  // 2. Se non c'è Luca, prova altre voci maschili italiane comuni
+  if (!v) {
+    v = voices.find(v => 
+      v.lang.startsWith('it') && 
+      /(luca|diego|paolo|francesco|giorgio|enrico)/i.test(v.name)
+    );
+  }
+
+  // 3. Altrimenti prendi la prima voce italiana disponibile
+  if (!v) {
+    v = voices.find(v => v.lang && v.lang.startsWith('it'));
+  }
+
+  if (v) u.voice = v;
+
+  u.onstart = () => setState('speaking');
+  u.onend = u.onerror = () => setState('idle');
   speechSynthesis.speak(u);
 }
-
 function listen(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){$('text').textContent='Il riconoscimento vocale non è disponibile qui: scrivi nella casella.';return;}
