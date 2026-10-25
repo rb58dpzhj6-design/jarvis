@@ -153,5 +153,31 @@ setState('idle');
 $('text').textContent='Buongiorno. Tocca ⚙ per inserire la chiave, poi tocca il cerchio e parlami.';
 draw();
 </script>
+<script>
+function speak(t){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
+  const all=speechSynthesis.getVoices();
+  const pref=(store.get('voice')||'Luca').toLowerCase();
+  const v=all.find(x=>x.name.toLowerCase().includes(pref))||all.find(x=>x.lang&&x.lang.startsWith('it'));
+  if(v){u.voice=v;u.lang=v.lang;}else{u.lang='it-IT';}
+  u.rate=0.95;u.pitch=0.9;
+  u.onstart=()=>setState('speaking');
+  u.onend=u.onerror=()=>setState('idle');
+  speechSynthesis.speak(u);
+}
+function config(){
+  const k=prompt('Chiave Gemini:',store.get('key')||'');
+  if(k!==null&&k.trim())store.set('key',k.trim());
+  const m=prompt('Modello:',store.get('model')||'gemini-flash-latest');
+  if(m!==null&&m.trim())store.set('model',m.trim());
+  const names=speechSynthesis.getVoices().filter(x=>/^(it|en)/.test(x.lang)).map(x=>x.name).join(', ');
+  const n=prompt('Voce (scrivi il nome, es. Luca o Daniel). Disponibili: '+names,store.get('voice')||'Luca');
+  if(n!==null&&n.trim())store.set('voice',n.trim());
+}
+$('cfg').onclick=config;
+</script>
+
 </body>
 </html>
+
