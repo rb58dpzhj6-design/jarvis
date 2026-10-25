@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<meta name="theme-color" content="#000814">
+<title>Jarvis</title>
+<style>
+html,body{margin:0;height:100%;background:#000814;color:#9fe8ff;font-family:-apple-system,Helvetica,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);box-sizing:border-box}
+canvas{flex:1;width:100%;min-height:0;touch-action:manipulation}
+#status{text-align:center;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:.8;height:20px}
+#text{text-align:center;font-size:17px;line-height:1.4;max-height:30%;overflow:auto;padding:8px 4px}
+#row{display:flex;gap:8px;padding:8px 0}
+input{flex:1;min-width:0;font-size:16px;padding:12px;border-radius:12px;border:1px solid #1d4a63;background:#001a2e;color:#cff4ff}
+button{font-size:16px;padding:12px 16px;border-radius:12px;border:0;background:#0aa6d6;color:#00131f}
+#cfg{background:#1d4a63;color:#cff4ff}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="orb"></canvas>
+  <div id="status"></div>
+  <div id="text"></div>
+  <div id="row">
+    <input id="inp" placeholder="Oppure scrivi qui…">
+    <button id="send">Invia</button>
+    <button id="cfg">⚙</button>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const store={
+  get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},
+  set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}
+};
+let state='idle',history=[];
+const SYS='Sei Jarvis, un assistente personale elegante, ironico e molto efficiente. Rispondi sempre in italiano, in modo breve e parlato (massimo 3 frasi), senza elenchi né formattazione. Oggi è '+new Date().toLocaleString('it-IT')+'.';
+
+function setState(s){
+  state=s;
+  $('status').textContent={idle:'Tocca il cerchio',listening:'Ti ascolto…',thinking:'Elaboro…',speaking:'Parlo…'}[s];
+}
+
+function config(){
+  const k=prompt('Incolla la tua chiave Gemini:',store.get('key')||'');
+  if(k!==null&&k.trim())store.set('key',k.trim());
+  const m=prompt('Modello (lascia così se non sai):',store.get('model')||'gemini-flash-latest');
+  if(m!==null&&m.trim())store.set('model',m.trim());
+}
+
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-flash-latest';
+    const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(store.get('key'));
+    const r=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({systemInstruction:{parts:[{text:SYS}]},contents:history.slice(-20)})
+    });
+    const j=await r.json();
+    if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
+    const a=j.candidates[0].content.parts.map(p=>p.text||'').join('').trim();
+    history.push({role:'model',parts:[{text:a}]});
+    $('text').textContent=a;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+
+function speak(t){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
+  u.lang='it-IT';
+  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.startsWith('it'));
+  if(v)u.voice=v;
+  u.onstart=()=>setState('speaking');
+  u.onend=u.onerror=()=>setState('idle');
+  speechSynthesis.speak(u);
+}
+
+function listen(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){$('text').textContent='Il riconoscimento vocale non è disponibile qui: scrivi nella casella.';return;}
+  const r=new SR();
+  r.lang='it-IT';
+  r.interimResults=false;
+  let got=false;
+  r.onstart=()=>{setState('listening');$('text').textContent='';};
+  r.onresult=e=>{got=true;const t=e.results[0][0].transcript;$('text').textContent='« '+t+' »';ask(t);};
+  r.onerror=e=>{$('text').textContent='Microfono: '+e.error;setState('idle');};
+  r.onend=()=>{if(!got&&state==='listening')setState('idle');};
+  r.start();
+}
+
+$('orb').addEventListener('click',()=>{
+  if(state==='speaking'){speechSynthesis.cancel();setState('idle');return;}
+  if(state==='thinking'||state==='listening')return;
+  speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  listen();
+});
+$('send').onclick=()=>{
+  const q=$('inp').value.trim();
+  if(!q)return;
+  $('inp').value='';
+  speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  $('text').textContent='« '+q+' »';
+  ask(q);
+};
+$('inp').addEventListener('keydown',e=>{if(e.key==='Enter')$('send').click();});
+$('cfg').onclick=config;
+speechSynthesis.getVoices();
+
+const cv=$('orb'),ctx=cv.getContext('2d');
+function fit(){const d=devicePixelRatio||1;cv.width=cv.clientWidth*d;cv.height=cv.clientHeight*d;}
+addEventListener('resize',fit);
+fit();
+let t=0;
+function draw(){
+  t+=0.02;
+  const d=devicePixelRatio||1,w=cv.width,h=cv.height,cx=w/2,cy=h/2,R=Math.min(w,h)*0.22;
+  ctx.clearRect(0,0,w,h);
+  const amp={idle:.03,listening:.12,thinking:.06,speaking:.16}[state];
+  const spd={idle:1,listening:2,thinking:4,speaking:3}[state];
+  const col={idle:'10,166,214',listening:'80,255,200',thinking:'255,190,60',speaking:'10,200,255'}[state];
+  const pulse=1+amp*Math.sin(t*spd*2)+(state==='speaking'?amp*.5*Math.sin(t*11):0);
+  const g=ctx.createRadialGradient(cx,cy,R*.2,cx,cy,R*pulse*2.2);
+  g.addColorStop(0,'rgba('+col+',.55)');
+  g.addColorStop(1,'rgba('+col+',0)');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(cx,cy,R*pulse*2.2,0,7);ctx.fill();
+  for(let i=0;i<3;i++){
+    ctx.strokeStyle='rgba('+col+','+(0.9-i*.25)+')';
+    ctx.lineWidth=(3-i)*d;
+    ctx.setLineDash([R*.3,R*.15*(i+1)]);
+    ctx.lineDashOffset=-t*spd*R*.3*(i%2?-1:1);
+    ctx.beginPath();ctx.arc(cx,cy,R*pulse*(1+i*.28),0,7);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba('+col+',.9)';
+  ctx.beginPath();ctx.arc(cx,cy,R*.35*pulse,0,7);ctx.fill();
+  requestAnimationFrame(draw);
+}
+setState('idle');
+$('text').textContent='Buongiorno. Tocca ⚙ per inserire la chiave, poi tocca il cerchio e parlami.';
+draw();
+</script>
+</body>
+</html>
