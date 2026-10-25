@@ -189,6 +189,136 @@ function speak(t){
   speechSynthesis.speak(u);
 }
 </script>
+<script>
+(function(){
+  const css=document.createElement('style');
+  css.textContent=`
+  #app{position:relative;z-index:1}
+  #grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:linear-gradient(rgba(0,200,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.07) 1px,transparent 1px);
+    background-size:32px 32px;
+    -webkit-mask-image:radial-gradient(circle at 50% 40%,#000 20%,transparent 75%);
+    mask-image:radial-gradient(circle at 50% 40%,#000 20%,transparent 75%)}
+  #scan{position:fixed;left:0;right:0;height:120px;z-index:2;pointer-events:none;
+    background:linear-gradient(transparent,rgba(0,200,255,.08),transparent);
+    animation:scan 6s linear infinite}
+  @keyframes scan{from{top:-120px}to{top:100%}}
+  #hud{position:fixed;inset:0;z-index:3;pointer-events:none;
+    font-family:ui-monospace,Menlo,monospace;color:#7fdcff;
+    text-transform:uppercase;letter-spacing:1.5px}
+  #hud .p{position:absolute;font-size:11px;line-height:1.7;opacity:.9}
+  #hud .tl{top:calc(env(safe-area-inset-top) + 14px);left:16px}
+  #hud .tr{top:calc(env(safe-area-inset-top) + 14px);right:16px;text-align:right}
+  #hud .ml{top:calc(env(safe-area-inset-top) + 86px);left:16px}
+  #hud .mr{top:calc(env(safe-area-inset-top) + 86px);right:16px;text-align:right}
+  #hud .big{font-size:20px;letter-spacing:3px;color:#cff4ff}
+  #hud b{color:#cff4ff;font-weight:600}
+  #hud .c{position:absolute;width:22px;height:22px;border:2px solid rgba(0,200,255,.6)}
+  #hud .c1{top:8px;left:8px;border-right:0;border-bottom:0}
+  #hud .c2{top:8px;right:8px;border-left:0;border-bottom:0}
+  #hud .c3{bottom:8px;left:8px;border-right:0;border-top:0}
+  #hud .c4{bottom:8px;right:8px;border-left:0;border-top:0}
+  #status{letter-spacing:4px}
+  `;
+  document.head.appendChild(css);
+
+  const grid=document.createElement('div');grid.id='grid';
+  const scan=document.createElement('div');scan.id='scan';
+  const hud=document.createElement('div');hud.id='hud';
+  hud.innerHTML=
+    '<div class="c c1"></div><div class="c c2"></div><div class="c c3"></div><div class="c c4"></div>'+
+    '<div class="p tl"><div class="big">JARVIS</div><div>Sistema attivo</div></div>'+
+    '<div class="p tr"><div class="big" id="hClock">--:--:--</div><div id="hDate"></div></div>'+
+    '<div class="p ml"><div>Stato <b id="hState">-</b></div><div>Rete <b id="hNet">-</b></div></div>'+
+    '<div class="p mr"><div>Scambi <b id="hN">0</b></div><div>Modello <b id="hModel">-</b></div></div>';
+  document.body.appendChild(grid);
+  document.body.appendChild(scan);
+  document.body.appendChild(hud);
+
+  const stati={idle:'In attesa',listening:'Ascolto',thinking:'Elaboro',speaking:'Parlo'};
+  function tick(){
+    const n=new Date();
+    document.getElementById('hClock').textContent=n.toLocaleTimeString('it-IT');
+    document.getElementById('hDate').textContent=n.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'});
+    document.getElementById('hState').textContent=stati[state]||'';
+    document.getElementById('hNet').textContent=navigator.onLine?'Online':'Offline';
+    document.getElementById('hN').textContent=Math.floor(history.length/2);
+    document.getElementById('hModel').textContent=(store.get('model')||'').replace('gemini-','');
+  }
+  setInterval(tick,500);
+  tick();
+})();
+
+let tt=0;
+function draw(){
+  tt+=0.016;
+  const d=devicePixelRatio||1,w=cv.width,h=cv.height,cx=w/2,cy=h/2,R=Math.min(w,h)*0.2;
+  ctx.setLineDash([]);
+  ctx.clearRect(0,0,w,h);
+  const col={idle:'0,200,255',listening:'80,255,200',thinking:'255,190,60',speaking:'0,220,255'}[state];
+  const spd={idle:1,listening:1.8,thinking:3.5,speaking:2.4}[state];
+  const amp={idle:.02,listening:.07,thinking:.04,speaking:.1}[state];
+  const pulse=1+amp*Math.sin(tt*spd*3)+(state==='speaking'?amp*.6*Math.sin(tt*13):0);
+
+  const g=ctx.createRadialGradient(cx,cy,R*.1,cx,cy,R*2.6);
+  g.addColorStop(0,'rgba('+col+',.35)');
+  g.addColorStop(1,'rgba('+col+',0)');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(cx,cy,R*2.6,0,7);ctx.fill();
+
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(tt*.15*spd);
+  for(let i=0;i<72;i++){
+    const a=i/72*Math.PI*2,long=i%6===0;
+    const r1=R*1.95,r2=R*(long?1.78:1.86);
+    ctx.strokeStyle='rgba('+col+','+(long?.9:.4)+')';
+    ctx.lineWidth=(long?2:1)*d;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*r1,Math.sin(a)*r1);
+    ctx.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  [[1.6,3,.5],[1.35,2,-.8],[1.1,4,1.2]].forEach((rg,k)=>{
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(tt*rg[2]*spd*.6);
+    ctx.strokeStyle='rgba('+col+','+(.85-k*.2)+')';
+    ctx.lineWidth=(3-k*.6)*d;
+    for(let s=0;s<rg[1];s++){
+      const a0=s/rg[1]*Math.PI*2,a1=a0+Math.PI*2/rg[1]*.62;
+      ctx.beginPath();ctx.arc(0,0,R*rg[0]*pulse,a0,a1);ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  if(state==='speaking'||state==='listening'){
+    ctx.strokeStyle='rgba('+col+',.9)';
+    ctx.lineWidth=2*d;
+    ctx.beginPath();
+    const N=96;
+    for(let i=0;i<=N;i++){
+      const a=i/N*Math.PI*2;
+      const wob=Math.sin(a*7+tt*9)*Math.sin(a*3-tt*5)*(state==='speaking'?.14:.07);
+      const r=R*(.78+Math.abs(wob)*1.4)*pulse;
+      const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;
+      if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+    }
+    ctx.closePath();ctx.stroke();
+  }
+
+  ctx.fillStyle='rgba('+col+',.9)';
+  ctx.beginPath();ctx.arc(cx,cy,R*.3*pulse,0,7);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.7)';
+  ctx.lineWidth=1.5*d;
+  ctx.beginPath();ctx.arc(cx,cy,R*.42*pulse,0,7);ctx.stroke();
+
+  for(let i=0;i<3;i++){
+    const a=tt*(.9+i*.5)*spd+i*2.1,r=R*2.15;
+    ctx.fillStyle='rgba('+col+',.95)';
+    ctx.beginPath();ctx.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,3*d,0,7);ctx.fill();
+  }
+  requestAnimationFrame(draw);
+}
+</script>
 
 </body>
 </html>
