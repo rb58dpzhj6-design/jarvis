@@ -177,6 +177,90 @@ function config(){
 }
 $('cfg').onclick=config;
 </script>
+<script>
+let audioCtx=null,currentSrc=null;
+function unlockAudio(){
+  try{
+    if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+  }catch(e){}
+}
+document.addEventListener('click',unlockAudio,true);
+document.addEventListener('touchend',unlockAudio,true);
+function stopSpeech(){
+  try{if(currentSrc)currentSrc.stop();}catch(e){}
+  currentSrc=null;
+  speechSynthesis.cancel();
+}
+document.addEventListener('click',e=>{
+  if(e.target&&e.target.id==='orb'&&state==='speaking')stopSpeech();
+},true);
+
+function speakLocal(t){
+  const u=new SpeechSynthesisUtterance(t);
+  const v=speechSynthesis.getVoices().find(x=>x.lang&&x.lang.startsWith('it'));
+  if(v){u.voice=v;u.lang=v.lang;}else{u.lang='it-IT';}
+  u.rate=0.95;u.pitch=0.85;
+  u.onstart=()=>setState('speaking');
+  u.onend=u.onerror=()=>setState('idle');
+  speechSynthesis.speak(u);
+}
+
+async function speak(t){
+  stopSpeech();
+  const clean=t.replace(/[*_#`]/g,'');
+  setState('speaking');
+  try{
+    unlockAudio();
+    const model=store.get('ttsmodel')||'gemini-3.8-flash-lite-tts';
+    const voice=store.get('gvoice')||'Charon';
+    const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(store.get('key'));
+    const r=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        contents:[{parts:[{text:clean}]}],
+        generationConfig:{
+          responseModalities:['AUDIO'],
+          speechConfig:{languageCode:'it-IT',voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}
+        }
+      })
+    });
+    const j=await r.json();
+    if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
+    const part=j.candidates[0].content.parts.find(p=>p.inlineData);
+    const bin=atob(part.inlineData.data);
+    const n=bin.length>>1;
+    const buf=audioCtx.createBuffer(1,n,24000);
+    const ch=buf.getChannelData(0);
+    for(let i=0;i<n;i++){
+      let v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);
+      if(v>=32768)v-=65536;
+      ch[i]=v/32768;
+    }
+    const src=audioCtx.createBufferSource();
+    src.buffer=buf;
+    src.connect(audioCtx.destination);
+    src.onended=()=>{currentSrc=null;setState('idle');};
+    currentSrc=src;
+    src.start();
+  }catch(e){
+    $('text').textContent=t+'\n\n(Voce Gemini non disponibile: '+e.message+')';
+    speakLocal(clean);
+  }
+}
+
+function config(){
+  const k=prompt('Chiave Gemini:',store.get('key')||'');
+  if(k!==null&&k.trim())store.set('key',k.trim());
+  const m=prompt('Modello:',store.get('model')||'gemini-3.5-flash-lite');
+  if(m!==null&&m.trim())store.set('model',m.trim());
+  const g=prompt('Voce Gemini (Charon, Orus, Alnilam, Rasalgethi, Iapetus):',store.get('gvoice')||'Charon');
+  if(g!==null&&g.trim())store.set('gvoice',g.trim());
+}
+$('cfg').onclick=config;
+</script>
+
 
 </body>
 </html>
