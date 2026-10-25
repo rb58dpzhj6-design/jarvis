@@ -49,6 +49,22 @@ function config(){
   if(k!==null&&k.trim())store.set('key',k.trim());
   const m=prompt('Modello (lascia così se non sai):',store.get('model')||'gemini-flash-latest');
   if(m!==null&&m.trim())store.set('model',m.trim());
+
+  // Scelta voce
+  const voices = speechSynthesis.getVoices().filter(v => v.lang && v.lang.startsWith('it'));
+  if(voices.length === 0){
+    alert('Nessuna voce italiana disponibile al momento.\nChiudi e riapri Safari, poi riprova.');
+    return;
+  }
+  let lista = voices.map((v,i) => (i+1)+'. '+v.name).join('\n');
+  const scelta = prompt('Voci italiane disponibili:\n\n'+lista+'\n\nScrivi il NUMERO della voce che vuoi usare\n(lascia vuoto per non cambiare):', store.get('voice')||'');
+  if(scelta !== null && scelta.trim()){
+    const idx = parseInt(scelta)-1;
+    if(voices[idx]){
+      store.set('voice', voices[idx].name);
+      alert('Voce impostata: ' + voices[idx].name);
+    }
+  }
 }
 
 async function ask(q){
@@ -78,36 +94,25 @@ async function ask(q){
 
 function speak(t){
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
-  u.lang = 'it-IT';
+  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
+  u.lang='it-IT';
 
+  const preferred = store.get('voice');
   const voices = speechSynthesis.getVoices();
-
-  // 1. Prova prima Luca
-  let v = voices.find(v => 
-    v.lang.startsWith('it') && 
-    /luca/i.test(v.name)
-  );
-
-  // 2. Se non c'è Luca, prova altre voci maschili italiane comuni
-  if (!v) {
-    v = voices.find(v => 
-      v.lang.startsWith('it') && 
-      /(luca|diego|paolo|francesco|giorgio|enrico)/i.test(v.name)
-    );
+  let v = null;
+  if(preferred){
+    v = voices.find(v => v.name === preferred);
   }
-
-  // 3. Altrimenti prendi la prima voce italiana disponibile
-  if (!v) {
+  if(!v){
     v = voices.find(v => v.lang && v.lang.startsWith('it'));
   }
+  if(v) u.voice = v;
 
-  if (v) u.voice = v;
-
-  u.onstart = () => setState('speaking');
-  u.onend = u.onerror = () => setState('idle');
+  u.onstart=()=>setState('speaking');
+  u.onend=u.onerror=()=>setState('idle');
   speechSynthesis.speak(u);
 }
+
 function listen(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){$('text').textContent='Il riconoscimento vocale non è disponibile qui: scrivi nella casella.';return;}
@@ -171,37 +176,8 @@ function draw(){
   requestAnimationFrame(draw);
 }
 setState('idle');
-$('text').textContent='Buongiorno. Tocca ⚙ per inserire la chiave, poi tocca il cerchio e parlami.';
+$('text').textContent='Buongiorno. Tocca ⚙ per inserire la chiave e scegliere la voce, poi tocca il cerchio e parlami.';
 draw();
 </script>
-<script>
-function speak(t){
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
-  const all=speechSynthesis.getVoices();
-  const pref=(store.get('voice')||'Luca').toLowerCase();
-  const v=all.find(x=>x.name.toLowerCase().includes(pref))||all.find(x=>x.lang&&x.lang.startsWith('it'));
-  if(v){u.voice=v;u.lang=v.lang;}else{u.lang='it-IT';}
-  u.rate=0.95;u.pitch=0.9;
-  u.onstart=()=>setState('speaking');
-  u.onend=u.onerror=()=>setState('idle');
-  speechSynthesis.speak(u);
-}
-function config(){
-  const k=prompt('Chiave Gemini:',store.get('key')||'');
-  if(k!==null&&k.trim())store.set('key',k.trim());
-  const m=prompt('Modello:',store.get('model')||'gemini-flash-latest');
-  if(m!==null&&m.trim())store.set('model',m.trim());
-  const names=speechSynthesis.getVoices().filter(x=>/^(it|en)/.test(x.lang)).map(x=>x.name).join(', ');
-  const n=prompt('Voce (scrivi il nome, es. Luca o Daniel). Disponibili: '+names,store.get('voice')||'Luca');
-  if(n!==null&&n.trim())store.set('voice',n.trim());
-}
-$('cfg').onclick=config;
-</script>
-<script>
-pt>
-
-
 </body>
 </html>
-
