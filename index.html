@@ -177,6 +177,18 @@ function config(){
 }
 $('cfg').onclick=config;
 </script>
+<script>
+function speak(t){
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(t.replace(/[*_#`]/g,''));
+  u.lang='it-IT';
+  u.rate=0.95;
+  u.pitch=0.9;
+  u.onstart=()=>setState('speaking');
+  u.onend=u.onerror=()=>setState('idle');
+  speechSynthesis.speak(u);
+}
+</script>
 
 </body>
 </html>
