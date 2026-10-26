@@ -725,6 +725,37 @@ route=async function(m,q){
   },500);
 })();
 </script>
+<script>
+async function titoliFeed(url){
+  const enc=encodeURIComponent(url);
+  const vie=[
+    ['https://api.rss2json.com/v1/api.json?rss_url='+enc,'json'],
+    ['https://cors.eu.org/'+url,'xml'],
+    ['https://api.allorigins.win/raw?url='+enc,'xml'],
+    ['https://api.codetabs.com/v1/proxy?quest='+enc,'xml'],
+    ['https://corsproxy.io/?'+enc,'xml']
+  ];
+  const errori=[];
+  for(const [u,tipo] of vie){
+    const host=u.split('/')[2];
+    try{
+      const r=await fetch(u);
+      if(!r.ok){errori.push(host+' '+r.status);continue;}
+      if(tipo==='json'){
+        const j=await r.json();
+        if(j.status==='ok'&&j.items&&j.items.length)return j.items.slice(0,8).map(x=>x.title);
+        errori.push(host+' '+(j.status||'vuoto'));
+      }else{
+        const xml=new DOMParser().parseFromString(await r.text(),'text/xml');
+        const t=Array.from(xml.querySelectorAll('item > title')).slice(0,8).map(n=>n.textContent.trim());
+        if(t.length)return t;
+        errori.push(host+' vuoto');
+      }
+    }catch(e){errori.push(host+' errore');}
+  }
+  throw new Error('feed non raggiungibile ('+errori.join(', ')+')');
+}
+</script>
 
 </body>
 </html>
