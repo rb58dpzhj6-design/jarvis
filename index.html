@@ -385,6 +385,87 @@ async function ask(q){
   }
 }
 </script>
+<script>
+const SYS4=SYS+' Quando nel messaggio ci sono DATI REALI, usali per rispondere con precisione (temperature e orari esatti) citando la fonte in modo naturale e senza leggere numeri superflui. Se non hai dati reali e la domanda richiede informazioni aggiornate, dì onestamente che non puoi verificarle: non inventare mai.';
+
+async function gen(model,contents,json,sys){
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(store.get('key'));
+  const body={systemInstruction:{parts:[{text:sys||SYS4}]},contents:contents};
+  if(json)body.generationConfig={responseMimeType:'application/json'};
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
+  return j.candidates[0].content.parts.map(p=>p.text||'').join('').trim();
+}
+
+async function route(model,q){
+  try{
+    const t=await gen(model,[{role:'user',parts:[{text:'Classifica questa richiesta. Rispondi SOLO con JSON nel formato {"tipo":"meteo|alba_tramonto|wiki|altro","luogo":"","argomento":""}. "meteo" per tempo, temperature, pioggia; "alba_tramonto" per orario di alba o tramonto; "wiki" per chiedere chi è o cos è qualcosa o qualcuno; "altro" per tutto il resto. "luogo" è la città citata (vuoto se non c\'è). "argomento" è il termine da cercare per "wiki". Richiesta: '+q}]}],true,'Sei un classificatore. Rispondi solo con JSON valido.');
+    return JSON.parse(t);
+  }catch(e){return {tipo:'altro'};}
+}
+
+async function geo(nome){
+  const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(nome)+'&count=1&language=it&format=json');
+  const j=await r.json();
+  if(!j.results||!j.results.length)throw new Error('città non trovata: '+nome);
+  return j.results[0];
+}
+
+async function datiMeteo(luogo){
+  const g=await geo(luogo);
+  const u='https://api.open-meteo.com/v1/forecast?latitude='+g.latitude+'&longitude='+g.longitude+'&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,weather_code&timezone=auto&forecast_days=3';
+  const r=await fetch(u);
+  const j=await r.json();
+  return {fonte:'Open-Meteo, '+g.name,testo:'Località: '+g.name+'. Orari nel fuso locale, codici meteo WMO. '+JSON.stringify({adesso:j.current,giorni:j.daily})};
+}
+
+async function datiWiki(arg){
+  const u='https://it.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch='+encodeURIComponent(arg)+'&gsrlimit=1&prop=extracts&exintro=1&explaintext=1&exchars=1200&format=json&origin=*';
+  const r=await fetch(u);
+  const j=await r.json();
+  const pages=j.query&&j.query.pages;
+  if(!pages)throw new Error('nessun risultato');
+  const p=Object.values(pages)[0];
+  return {fonte:'Wikipedia, '+p.title,testo:p.title+': '+p.extract};
+}
+
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-3.5-flash-lite';
+    const rt=await route(model,q);
+    let dati=null,errDati='';
+    try{
+      if(rt.tipo==='meteo'||rt.tipo==='alba_tramonto'){
+        let luogo=(rt.luogo||'').trim()||store.get('city')||'';
+        if(!luogo){
+          luogo=(prompt('Di quale città parli? La ricordo per la prossima volta.')||'').trim();
+          if(luogo)store.set('city',luogo);
+        }
+        if(luogo)dati=await datiMeteo(luogo);
+      }else if(rt.tipo==='wiki'&&rt.argomento){
+        dati=await datiWiki(rt.argomento);
+      }
+    }catch(e){errDati=e.message;}
+    const contents=history.slice(-20);
+    if(dati)contents[contents.length-1]={role:'user',parts:[{text:q+'\n\n[DATI REALI — fonte: '+dati.fonte+'. Usa questi dati per rispondere. '+dati.testo+']'}]};
+    const a=await gen(model,contents,false,SYS4);
+    history.push({role:'model',parts:[{text:a}]});
+    let note='';
+    if(dati)note='\n\n🔎 '+dati.fonte;
+    else if(errDati)note='\n\n(dati non disponibili: '+errDati+')';
+    $('text').textContent=a+note;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+</script>
 
 </body>
 </html>
