@@ -319,6 +319,45 @@ function draw(){
   requestAnimationFrame(draw);
 }
 </script>
+<script>
+const SYS3=SYS+' Hai accesso alla ricerca sul web: usala quando serve per notizie, meteo, prezzi, risultati sportivi o qualsiasi informazione aggiornata. Non dire mai che non puoi cercare.';
+
+async function callGemini(model,withSearch){
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(store.get('key'));
+  const body={systemInstruction:{parts:[{text:SYS3}]},contents:history.slice(-20)};
+  if(withSearch)body.tools=[{google_search:{}}];
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(!r.ok)throw new Error((j.error&&j.error.message)||r.status);
+  return j;
+}
+
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-3.5-flash-lite';
+    let j,noSearch=false;
+    try{j=await callGemini(model,true);}
+    catch(e){noSearch=true;j=await callGemini(model,false);}
+    const cand=j.candidates[0];
+    const a=cand.content.parts.map(p=>p.text||'').join('').trim();
+    history.push({role:'model',parts:[{text:a}]});
+    const gm=cand.groundingMetadata;
+    const qs=gm&&gm.webSearchQueries?gm.webSearchQueries:[];
+    let note='';
+    if(qs.length)note='\n\n🔎 '+qs.join(' · ');
+    else if(noSearch)note='\n\n(ricerca web non disponibile)';
+    $('text').textContent=a+note;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+</script>
 
 </body>
 </html>
