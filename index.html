@@ -400,6 +400,147 @@ async function ask(q){
   }
 }
 </script>
+<script>
+(function(){
+  let S={};
+  try{S=JSON.parse(store.get('stats')||'{}');}catch(e){S={};}
+  S.n=S.n||0;S.parole=S.parole||0;S.voc=S.voc||[];
+  const vocSet=new Set(S.voc);
+  let flash=0;
+  function salva(){
+    S.voc=Array.from(vocSet).slice(-4000);
+    store.set('stats',JSON.stringify(S));
+  }
+  function conta(testo){
+    const w=(testo||'').toLowerCase().match(/[a-zàèéìòù]{2,}/g)||[];
+    S.parole+=w.length;
+    let nuovi=0;
+    w.forEach(x=>{if(!vocSet.has(x)){vocSet.add(x);nuovi++;}});
+    return nuovi;
+  }
+  const askOrig=ask;
+  ask=async function(q){
+    if(conta(q)>0)flash=1;
+    await askOrig(q);
+    const r=($('text').textContent||'').split('\n\n')[0];
+    if(r&&!/^Errore:/.test(r)&&r.charAt(0)!=='«'){
+      if(conta(r)>0)flash=1;
+      S.n+=1;
+    }
+    salva();
+  };
+
+  document.title='J.A.R.V.I.S';
+  const big=document.querySelector('#hud .tl .big');
+  if(big){big.textContent='J.A.R.V.I.S';}
+  else{
+    const titolo=document.createElement('div');
+    titolo.textContent='J.A.R.V.I.S';
+    titolo.style.cssText='position:fixed;top:calc(env(safe-area-inset-top) + 14px);left:0;right:0;text-align:center;z-index:3;pointer-events:none;font:700 20px ui-monospace,Menlo,monospace;letter-spacing:4px;color:#cff4ff';
+    document.body.appendChild(titolo);
+  }
+
+  const CFG={
+    idle:{col:'150,205,255',vel:.12,amp:.012},
+    listening:{col:'110,255,210',vel:.25,amp:.05},
+    thinking:{col:'255,200,90',vel:.9,amp:.03},
+    speaking:{col:'120,225,255',vel:.3,amp:.09}
+  };
+  let nodi=[],nTot=0,rot=0;
+  const T0=performance.now();
+  function costruisci(n){
+    nodi=[];
+    const ga=Math.PI*(3-Math.sqrt(5));
+    for(let i=0;i<n;i++){
+      const y=1-(i/(n-1))*2;
+      const r=Math.sqrt(Math.max(0,1-y*y));
+      const th=ga*i;
+      const rad=0.6+Math.random()*0.45;
+      nodi.push({x:Math.cos(th)*r*rad,y:y*rad,z:Math.sin(th)*r*rad,f:Math.random()*6.28});
+    }
+    nTot=n;
+  }
+
+  draw=function(){
+    const d=devicePixelRatio||1,w=cv.width,h=cv.height,cx=w/2,cy=h*0.5;
+    const R=Math.min(w,h)*0.3;
+    const neuroni=vocSet.size;
+    const n=Math.min(200,70+Math.floor(neuroni/4));
+    if(n!==nTot)costruisci(n);
+    const c=CFG[state]||CFG.idle;
+    const t=(performance.now()-T0)/1000;
+    ctx.setLineDash([]);
+    ctx.clearRect(0,0,w,h);
+    rot+=c.vel*0.016;
+    flash*=0.97;
+    const cs=Math.cos(rot),sn=Math.sin(rot),ct=Math.cos(.35),st=Math.sin(.35);
+    const K=R*1.55;
+    const P=nodi.map(p=>{
+      const wob=1+c.amp*Math.sin(t*(state==='speaking'?9:2.5)+p.f*3);
+      const x=p.x*wob,y=p.y*wob,z=p.z*wob;
+      const x1=x*cs+z*sn,z1=-x*sn+z*cs;
+      const y1=y*ct-z1*st,z2=y*st+z1*ct;
+      const pr=1/(1.9-z2*0.6);
+      return {sx:cx+x1*K*pr,sy:cy+y1*K*pr,z:z2};
+    });
+
+    const g=ctx.createRadialGradient(cx,cy,R*.1,cx,cy,R*2.2);
+    g.addColorStop(0,'rgba('+c.col+','+(0.28+0.2*flash).toFixed(3)+')');
+    g.addColorStop(1,'rgba('+c.col+',0)');
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,w,h);
+
+    const maxD=Math.pow(R*0.36,2);
+    ctx.lineWidth=d;
+    for(let i=0;i<P.length;i++){
+      const a=P[i];
+      for(let j=i+1;j<P.length;j++){
+        const b=P[j];
+        const dx=a.sx-b.sx,dy=a.sy-b.sy,dd=dx*dx+dy*dy;
+        if(dd<maxD){
+          const dep=((a.z+b.z)/2+1)/2;
+          const al=(1-dd/maxD)*(0.15+0.5*dep)+0.15*flash;
+          ctx.strokeStyle='rgba('+c.col+','+al.toFixed(3)+')';
+          ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke();
+        }
+      }
+    }
+
+    P.forEach(p=>{
+      const dep=(p.z+1)/2;
+      ctx.fillStyle='rgba('+c.col+','+(0.35+0.6*dep).toFixed(2)+')';
+      ctx.beginPath();ctx.arc(p.sx,p.sy,(1.2+2.2*dep)*d*(1+0.5*flash),0,7);ctx.fill();
+    });
+
+    if((state==='thinking'||state==='speaking')&&P.length){
+      for(let i=0;i<5;i++){
+        const p=P[Math.floor(t*(state==='thinking'?7:4)+i*41)%P.length];
+        ctx.fillStyle='rgba('+c.col+',.35)';
+        ctx.beginPath();ctx.arc(p.sx,p.sy,9*d,0,7);ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.95)';
+        ctx.beginPath();ctx.arc(p.sx,p.sy,3.5*d,0,7);ctx.fill();
+      }
+    }
+
+    const g3=ctx.createRadialGradient(cx,cy,0,cx,cy,R*.5);
+    g3.addColorStop(0,'rgba(255,255,255,'+(0.3+0.2*Math.sin(t*3)+0.2*flash).toFixed(3)+')');
+    g3.addColorStop(1,'rgba('+c.col+',0)');
+    ctx.fillStyle=g3;
+    ctx.beginPath();ctx.arc(cx,cy,R*.5,0,7);ctx.fill();
+
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(207,244,255,.95)';
+    ctx.font='700 '+(34*d)+'px ui-monospace,Menlo,monospace';
+    ctx.fillText(S.parole.toLocaleString('it-IT'),cx,h-70*d);
+    ctx.fillStyle='rgba('+c.col+',.9)';
+    ctx.font=(11*d)+'px ui-monospace,Menlo,monospace';
+    ctx.fillText('INFORMAZIONI ANALIZZATE',cx,h-46*d);
+    ctx.fillText('NEURONI '+neuroni.toLocaleString('it-IT')+'  ·  SINAPSI '+S.n.toLocaleString('it-IT'),cx,h-26*d);
+
+    requestAnimationFrame(draw);
+  };
+})();
+</script>
 
 </body>
 </html>
