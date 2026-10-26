@@ -679,7 +679,31 @@ async function ask(q){
       }else if(rt.tipo==='meteo'||rt.tipo==='alba_tramonto'){
         let luogo=(rt.luogo||'').trim()||store.get('city')||'';
         if(!luogo){
-          luogo=(prompt('Di quale città parli? La ricordo per la prossima volta.')||
+          luogo=(prompt('Di quale città parli? La ricordo per la prossima volta.')||'').trim();
+          if(luogo)store.set('city',luogo);
+        }
+        if(luogo)dati=await datiMeteo(luogo);
+      }else if(rt.tipo==='wiki'&&rt.argomento){
+        dati=await datiWiki(rt.argomento);
+      }
+    }catch(e){errDati=e.message;}
+    const contents=history.slice(-20);
+    if(dati)contents[contents.length-1]={role:'user',parts:[{text:q+'\n\n[DATI REALI — fonte: '+dati.fonte+'. Usa questi dati per rispondere. '+dati.testo+']'}]};
+    const a=await gen(model,contents,false,SYS4);
+    history.push({role:'model',parts:[{text:a}]});
+    let note='';
+    if(dati&&dati.fonte!=='Timer'&&dati.fonte!=='Jarvis')note='\n\n🔎 '+dati.fonte;
+    else if(errDati)note='\n\n(dati non disponibili: '+errDati+')';
+    $('text').textContent=a+note;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+</script>
+
 
 </body>
 </html>
