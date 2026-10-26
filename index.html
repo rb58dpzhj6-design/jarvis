@@ -358,6 +358,33 @@ async function ask(q){
   }
 }
 </script>
+<script>
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-3.5-flash-lite';
+    let j,errSearch='';
+    try{j=await callGemini(model,true);}
+    catch(e){errSearch=e.message;j=await callGemini(model,false);}
+    const cand=j.candidates[0];
+    const a=cand.content.parts.map(p=>p.text||'').join('').trim();
+    history.push({role:'model',parts:[{text:a}]});
+    const gm=cand.groundingMetadata;
+    const qs=gm&&gm.webSearchQueries?gm.webSearchQueries:[];
+    let note='';
+    if(qs.length)note='\n\n🔎 '+qs.join(' · ');
+    else if(errSearch)note='\n\n(ricerca web non disponibile: '+errSearch+')';
+    $('text').textContent=a+note;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+</script>
 
 </body>
 </html>
