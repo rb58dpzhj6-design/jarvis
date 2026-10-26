@@ -703,7 +703,28 @@ async function ask(q){
   }
 }
 </script>
-
+<script>
+const _gen=gen;
+gen=async function(m,c,j,s){
+  try{return await _gen(m,c,j,s);}
+  catch(e){window._err=e.message;throw e;}
+};
+const _route=route;
+route=async function(m,q){
+  window._err='';
+  const r=await _route(m,q);
+  window._r=(r.tipo||'?')+(r.argomento?' / '+r.argomento:'');
+  return r;
+};
+(function(){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;left:16px;top:calc(env(safe-area-inset-top) + 150px);z-index:3;pointer-events:none;font:10px ui-monospace,Menlo,monospace;color:#7fdcff;opacity:.8;max-width:55%;line-height:1.5';
+  document.body.appendChild(d);
+  setInterval(()=>{
+    d.textContent=window._r?('router: '+window._r+(window._err?' | errore: '+window._err:'')):'';
+  },500);
+})();
+</script>
 
 </body>
 </html>
