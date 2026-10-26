@@ -617,6 +617,69 @@ async function ask(q){
   }
 }
 </script>
+<script>
+const FEED={
+  ultima_ora:['Ultima ora','https://www.ansa.it/sito/notizie/topnews/topnews_rss.xml'],
+  mondo:['Mondo','https://www.ansa.it/sito/notizie/mondo/mondo_rss.xml'],
+  politica:['Politica','https://www.ansa.it/sito/notizie/politica/politica_rss.xml'],
+  economia:['Economia','https://www.ansa.it/sito/notizie/economia/economia_rss.xml'],
+  cronaca:['Cronaca','https://www.ansa.it/sito/notizie/cronaca/cronaca_rss.xml'],
+  sport:['Sport','https://www.ansa.it/sito/notizie/sport/sport_rss.xml'],
+  calcio:['Calcio','https://www.ansa.it/sito/notizie/sport/calcio/calcio_rss.xml'],
+  cultura:['Cultura','https://www.ansa.it/sito/notizie/cultura/cultura_rss.xml']
+};
+
+async function titoliFeed(url){
+  try{
+    const r=await fetch('https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(url));
+    const j=await r.json();
+    if(j.status==='ok'&&j.items&&j.items.length)return j.items.slice(0,8).map(x=>x.title);
+  }catch(e){}
+  const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(url));
+  const xml=new DOMParser().parseFromString(await r2.text(),'text/xml');
+  const t=Array.from(xml.querySelectorAll('item > title')).slice(0,8).map(n=>n.textContent.trim());
+  if(!t.length)throw new Error('feed non raggiungibile');
+  return t;
+}
+
+async function datiNotizie(cat){
+  const f=FEED[cat]||FEED.ultima_ora;
+  const t=await titoliFeed(f[1]);
+  return {fonte:'ANSA, '+f[0],testo:'Titoli più recenti di ANSA ('+f[0]+'), dal più recente: '+t.map((x,i)=>(i+1)+') '+x).join(' ')+' . Riassumi a voce i 3 o 4 più importanti con parole tue, senza leggere i titoli alla lettera, e nomina ANSA come fonte.'};
+}
+
+async function route(model,q){
+  try{
+    const t=await gen(model,[{role:'user',parts:[{text:'Classifica questa richiesta. Rispondi SOLO con JSON nel formato {"tipo":"meteo|alba_tramonto|wiki|notizie|timer|annulla_timer|promemoria|altro","luogo":"","argomento":"","secondi":0,"etichetta":""}. "meteo" per tempo, temperature, pioggia; "alba_tramonto" per orario di alba o tramonto; "wiki" per chiedere chi è o cos è qualcosa o qualcuno (in "argomento" il termine da cercare); "notizie" per notizie del giorno o ultime notizie (in "argomento" una sola categoria tra ultima_ora, mondo, politica, economia, cronaca, sport, calcio, cultura; usa ultima_ora se generico); "timer" per timer, sveglia, ricordami o avvisami TRA un certo tempo: in "secondi" la durata totale in secondi e in "etichetta" una o due parole; "annulla_timer" per fermare o cancellare i timer; "promemoria" per un promemoria a un giorno o a un\'ora precisi (es. domani alle 9); "altro" per tutto il resto. "luogo" è la città citata (vuoto se non c\'è). Richiesta: '+q}]}],true,'Sei un classificatore. Rispondi solo con JSON valido.');
+    return JSON.parse(t);
+  }catch(e){return {tipo:'altro'};}
+}
+
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-3.5-flash-lite';
+    const rt=await route(model,q);
+    let dati=null,errDati='';
+    try{
+      const sec=Math.round(Number(rt.secondi)||0);
+      if(rt.tipo==='timer'&&sec>0){
+        addTimer(sec,rt.etichetta||'timer');
+        dati={fonte:'Timer',testo:'Ho appena avviato un timer di '+sec+' secondi'+(rt.etichetta?' ('+rt.etichetta+')':'')+'. Confermalo in una frase, dicendo la durata in modo naturale (minuti e secondi).'};
+      }else if(rt.tipo==='annulla_timer'){
+        const n=timers.length;
+        clearTimers();
+        dati={fonte:'Timer',testo:'Ho annullato '+n+' timer. Confermalo in una frase.'};
+      }else if(rt.tipo==='promemoria'){
+        dati={fonte:'Jarvis',testo:'L\'utente vuole un promemoria a un giorno o a un\'ora precisi, ma non puoi ancora crearli: per ora sai fare solo timer per un tempo (per esempio tra 10 minuti). Dillo con garbo e proponi un timer.'};
+      }else if(rt.tipo==='notizie'){
+        dati=await datiNotizie(rt.argomento);
+      }else if(rt.tipo==='meteo'||rt.tipo==='alba_tramonto'){
+        let luogo=(rt.luogo||'').trim()||store.get('city')||'';
+        if(!luogo){
+          luogo=(prompt('Di quale città parli? La ricordo per la prossima volta.')||
 
 </body>
 </html>
