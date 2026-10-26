@@ -466,6 +466,157 @@ async function ask(q){
   }
 }
 </script>
+<script>
+const timers=[];
+let wakeLock=null;
+
+(function(){
+  const css=document.createElement('style');
+  css.textContent='#tm{position:fixed;right:16px;top:calc(env(safe-area-inset-top) + 150px);z-index:3;pointer-events:none;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#7fdcff;line-height:1.7}#tm b{color:#ffd27a;font-weight:600}';
+  document.head.appendChild(css);
+  const d=document.createElement('div');d.id='tm';document.body.appendChild(d);
+})();
+
+document.addEventListener('click',()=>{
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!window._ac)window._ac=new AC();
+    if(window._ac.state==='suspended')window._ac.resume();
+  }catch(e){}
+},true);
+
+function saveTimers(){store.set('timers',JSON.stringify(timers));}
+function loadTimers(){
+  try{
+    JSON.parse(store.get('timers')||'[]').forEach(x=>{if(x.fine>Date.now())timers.push(x);});
+  }catch(e){}
+}
+function fmtT(ms){
+  let s=Math.max(0,Math.round(ms/1000));
+  const h=Math.floor(s/3600);s%=3600;
+  const m=Math.floor(s/60);s%=60;
+  const p=n=>String(n).padStart(2,'0');
+  return (h?h+':':'')+p(m)+':'+p(s);
+}
+function renderTimers(){
+  const el=document.getElementById('tm');
+  if(!el)return;
+  el.textContent='';
+  timers.forEach(t=>{
+    const row=document.createElement('div');
+    row.textContent=t.label+' ';
+    const b=document.createElement('b');
+    b.textContent=fmtT(t.fine-Date.now());
+    row.appendChild(b);
+    el.appendChild(row);
+  });
+}
+async function keepAwake(){
+  try{
+    if(timers.length&&!wakeLock&&navigator.wakeLock){
+      wakeLock=await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release',()=>{wakeLock=null;});
+    }else if(!timers.length&&wakeLock){
+      await wakeLock.release();wakeLock=null;
+    }
+  }catch(e){}
+}
+function beep(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!window._ac)window._ac=new AC();
+    const ac=window._ac;
+    if(ac.state==='suspended')ac.resume();
+    for(let i=0;i<3;i++){
+      const o=ac.createOscillator(),g=ac.createGain();
+      const t0=ac.currentTime+i*0.4;
+      o.type='sine';o.frequency.value=880;
+      g.gain.setValueAtTime(0.0001,t0);
+      g.gain.exponentialRampToValueAtTime(0.4,t0+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+0.3);
+      o.connect(g);g.connect(ac.destination);
+      o.start(t0);o.stop(t0+0.35);
+    }
+  }catch(e){}
+}
+function addTimer(sec,label){
+  timers.push({fine:Date.now()+sec*1000,label:label||'timer'});
+  saveTimers();renderTimers();keepAwake();
+}
+function clearTimers(){
+  timers.length=0;saveTimers();renderTimers();keepAwake();
+}
+setInterval(()=>{
+  const now=Date.now();
+  const scaduti=timers.filter(t=>t.fine<=now);
+  if(scaduti.length){
+    scaduti.forEach(t=>timers.splice(timers.indexOf(t),1));
+    saveTimers();
+    scaduti.forEach(t=>{
+      beep();
+      const msg='Il timer '+t.label+' è scaduto, '+(store.get('nome')||'signore')+'.';
+      $('text').textContent=msg;
+      speak(msg);
+    });
+    keepAwake();
+  }
+  renderTimers();
+},1000);
+loadTimers();renderTimers();keepAwake();
+
+async function route(model,q){
+  try{
+    const t=await gen(model,[{role:'user',parts:[{text:'Classifica questa richiesta. Rispondi SOLO con JSON nel formato {"tipo":"meteo|alba_tramonto|wiki|timer|annulla_timer|promemoria|altro","luogo":"","argomento":"","secondi":0,"etichetta":""}. "meteo" per tempo, temperature, pioggia; "alba_tramonto" per orario di alba o tramonto; "wiki" per chiedere chi è o cos è qualcosa o qualcuno; "timer" per timer, sveglia, ricordami o avvisami TRA un certo tempo (minuti, ore, secondi): in "secondi" metti la durata totale in secondi e in "etichetta" una o due parole (es. pasta, uova); "annulla_timer" per fermare o cancellare i timer; "promemoria" per un promemoria a un giorno o a un\'ora precisi (es. domani alle 9); "altro" per tutto il resto. "luogo" è la città citata (vuoto se non c\'è). "argomento" è il termine da cercare per "wiki". Richiesta: '+q}]}],true,'Sei un classificatore. Rispondi solo con JSON valido.');
+    return JSON.parse(t);
+  }catch(e){return {tipo:'altro'};}
+}
+
+async function ask(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const model=store.get('model')||'gemini-3.5-flash-lite';
+    const rt=await route(model,q);
+    let dati=null,errDati='';
+    try{
+      const sec=Math.round(Number(rt.secondi)||0);
+      if(rt.tipo==='timer'&&sec>0){
+        addTimer(sec,rt.etichetta||'timer');
+        dati={fonte:'Timer',testo:'Ho appena avviato un timer di '+sec+' secondi'+(rt.etichetta?' ('+rt.etichetta+')':'')+'. Confermalo in una frase, dicendo la durata in modo naturale (minuti e secondi).'};
+      }else if(rt.tipo==='annulla_timer'){
+        const n=timers.length;
+        clearTimers();
+        dati={fonte:'Timer',testo:'Ho annullato '+n+' timer. Confermalo in una frase.'};
+      }else if(rt.tipo==='promemoria'){
+        dati={fonte:'Jarvis',testo:'L\'utente vuole un promemoria a un giorno o a un\'ora precisi, ma non puoi ancora crearli: per ora sai fare solo timer per un tempo (per esempio tra 10 minuti). Dillo con garbo e proponi un timer.'};
+      }else if(rt.tipo==='meteo'||rt.tipo==='alba_tramonto'){
+        let luogo=(rt.luogo||'').trim()||store.get('city')||'';
+        if(!luogo){
+          luogo=(prompt('Di quale città parli? La ricordo per la prossima volta.')||'').trim();
+          if(luogo)store.set('city',luogo);
+        }
+        if(luogo)dati=await datiMeteo(luogo);
+      }else if(rt.tipo==='wiki'&&rt.argomento){
+        dati=await datiWiki(rt.argomento);
+      }
+    }catch(e){errDati=e.message;}
+    const contents=history.slice(-20);
+    if(dati)contents[contents.length-1]={role:'user',parts:[{text:q+'\n\n[DATI REALI — fonte: '+dati.fonte+'. Usa questi dati per rispondere. '+dati.testo+']'}]};
+    const a=await gen(model,contents,false,SYS4);
+    history.push({role:'model',parts:[{text:a}]});
+    let note='';
+    if(dati&&dati.fonte!=='Timer'&&dati.fonte!=='Jarvis')note='\n\n🔎 '+dati.fonte;
+    else if(errDati)note='\n\n(dati non disponibili: '+errDati+')';
+    $('text').textContent=a+note;
+    speak(a);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+</script>
 
 </body>
 </html>
