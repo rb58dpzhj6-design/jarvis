@@ -632,6 +632,66 @@ async function ask(q){
   setInterval(()=>{const n=leggi().length;lab.textContent='Memoria '+n+(n===1?' ricordo':' ricordi');},1000);
 })();
 </script>
+<script>
+let recognition;
+let isListeningActive = false;
+
+function initVoiceAssistant() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Il vostro browser non supporta il riconoscimento vocale nativo, signore.");
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'it-IT';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = function(event) {
+        const spokenText = event.results[0][0].transcript.toLowerCase();
+        console.log("Comando vocale ricevuto:", spokenText);
+
+        if (spokenText.includes("jarvis") || isListeningActive) {
+            const cleanCommand = spokenText.replace("jarvis", "").trim();
+            if (cleanCommand.length > 0) {
+                document.getElementById('userInput').value = cleanCommand;
+                sendMessage();
+            }
+        }
+    };
+
+    recognition.onerror = function(event) {
+        console.error("Errore nel riconoscimento vocale:", event.error);
+    };
+
+    recognition.onend = function() {
+        if (isListeningActive) {
+            try {
+                recognition.start();
+            } catch (e) {
+                console.log("Riavvio ascolto in corso...");
+            }
+        }
+    };
+}
+
+function toggleContinuousListening() {
+    isListeningActive = !isListeningActive;
+    const statusIndicator = document.getElementById('statusText');
+    
+    if (isListeningActive) {
+        initVoiceAssistant();
+        recognition.start();
+        if (statusIndicator) statusIndicator.innerText = "STATO IN ASCOLTO";
+        console.log("Jarvis è ora in ascolto continuo, signore.");
+    } else {
+        if (recognition) recognition.stop();
+        if (statusIndicator) statusIndicator.innerText = "STATO PARLO";
+        console.log("Ascolto continuo disattivato.");
+    }
+}
+</script>
 
 </body>
 </html>
