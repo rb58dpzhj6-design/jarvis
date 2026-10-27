@@ -541,6 +541,13 @@ async function ask(q){
   };
 })();
 </script>
+<script>
+(function(){
+  const h=new Date().getHours();
+  const s=(h>=5&&h<18)?'Buongiorno':(h>=18&&h<23)?'Buonasera':'Buonanotte';
+  $('text').textContent=s+', '+(store.get('nome')||'signore')+'.';
+})();
+</script>
 
 </body>
 </html>
