@@ -632,6 +632,206 @@ async function ask(q){
   setInterval(()=>{const n=leggi().length;lab.textContent='Memoria '+n+(n===1?' ricordo':' ricordi');},1000);
 })();
 </script>
+<script>
+(function(){
+  function ridimensiona(file){
+    return new Promise((res,rej)=>{
+      const img=new Image();
+      const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        const k=Math.min(1,1024/Math.max(img.width,img.height));
+        const c=document.createElement('canvas');
+        c.width=Math.round(img.width*k);
+        c.height=Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        URL.revokeObjectURL(url);
+        const d=c.toDataURL('image/jpeg',0.8);
+        res({mime:'image/jpeg',data:d.split(',')[1],url:d});
+      };
+      img.onerror=()=>rej(new Error('immagine non leggibile'));
+      img.src=url;
+    });
+  }
+
+  const sel=document.createElement('input');
+  sel.type='file';sel.accept='image/*';sel.style.display='none';
+  document.body.appendChild(sel);
+
+  const btn=document.createElement('button');
+  btn.textContent='📷';
+  btn.style.cssText='background:#1d4a63;color:#cff4ff';
+  $('row').insertBefore(btn,$('cfg'));
+
+  const mini=document.createElement('img');
+  mini.style.cssText='display:none;height:44px;width:44px;object-fit:cover;border-radius:10px;border:1px solid #1d4a63;align-self:center';
+  $('row').insertBefore(mini,$('inp'));
+  const ph=$('inp').placeholder;
+
+  function aggiorna(){
+    if(window._foto){mini.src=window._foto.url;mini.style.display='block';$('inp').placeholder='Domanda sulla foto…';}
+    else{mini.style.display='none';$('inp').placeholder=ph;}
+  }
+  mini.onclick=()=>{window._foto=null;aggiorna();$('text').textContent='Foto tolta.';};
+  btn.onclick=()=>sel.click();
+  sel.onchange=async()=>{
+    const f=sel.files&&sel.files[0];
+    if(!f)return;
+    try{
+      window._foto=await ridimensiona(f);
+      aggiorna();
+      $('text').textContent='Foto pronta, '+(store.get('nome')||'signore')+'. Mi faccia la sua domanda a voce o scrivendo.';
+    }catch(e){$('text').textContent='Errore foto: '+e.message;}
+    sel.value='';
+  };
+
+  const gen0=gen;
+  gen=async function(model,contents,json,sys){
+    if(window._foto&&!json){
+      const c=contents.slice();
+      const last=c[c.length-1];
+      c[c.length-1]={role:last.role,parts:[{inlineData:{mimeType:window._foto.mime,data:window._foto.data}}].concat(last.parts)};
+      return gen0(model,c,json,sys);
+    }
+    return gen0(model,contents,json,sys);
+  };
+  const route0=route;
+  route=async function(m,q){
+    if(window._foto)return {tipo:'altro'};
+    return route0(m,q);
+  };
+
+  $('send').onclick=()=>{
+    let q=$('inp').value.trim();
+    if(!q&&window._foto)q='Descrivi questa foto.';
+    if(!q)return;
+    $('inp').value='';
+    speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+    $('text').textContent='« '+q+' »';
+    ask(q);
+  };
+})();
+</script>
+<script>
+(function(){
+  const st=document.createElement('style');
+  st.textContent='#text{max-height:42%!important}';
+  document.head.appendChild(st);
+
+  const gen2=gen;
+  gen=async function(model,contents,json,sys){
+    if(window._foto&&!json){
+      const last=contents[contents.length-1];
+      const q=last.parts.map(p=>p.text||'').join(' ');
+      if(/eserciz|risolv|svolg|problem|compit|calcol|traduc|corregg|spieg|equazion|espressio/i.test(q)){
+        const base=(!sys||sys===SYS4)?(SYS4+' '+(typeof persona==='function'?persona():'')):sys;
+        return gen2(model,contents,json,base+' ESERCIZI: se la foto contiene esercizi, svolgili uno alla volta con i passaggi essenziali e il risultato, fino a 12 frasi, in italiano semplice. Se qualche parola o numero non si legge bene, dillo invece di indovinare. Alla fine segnala quali risultati controlleresti due volte.');
+      }
+    }
+    return gen2(model,contents,json,sys);
+  };
+
+  const speak0=speak;
+  speak=function(t){
+    if(t.length>380){
+      let c=t.slice(0,380);
+      const i=Math.max(c.lastIndexOf('. '),c.lastIndexOf('? '),c.lastIndexOf('! '));
+      c=(i>120?c.slice(0,i+1):c)+' Il resto è sullo schermo.';
+      return speak0(c);
+    }
+    return speak0(t);
+  };
+})();
+</script>
+<script>
+(function(){
+  const css=document.createElement('style');
+  css.textContent='#gal{display:none;position:fixed;left:6%;right:6%;top:18%;max-height:56%;z-index:6;background:rgba(0,8,20,.94);border:1px solid #1d4a63;border-radius:14px;padding:10px;text-align:center;font:13px -apple-system,Helvetica,sans-serif;color:#cff4ff;overflow:auto}#gal img{max-width:100%;max-height:36vh;object-fit:contain;border-radius:8px}#gal a{color:#7fdcff}#gal .x{position:absolute;top:6px;right:10px;font-size:22px;line-height:1;color:#9fe8ff}';
+  document.head.appendChild(css);
+  const gal=document.createElement('div');
+  gal.id='gal';
+  document.body.appendChild(gal);
+  gal.onclick=e=>{if(e.target.tagName!=='A')gal.style.display='none';};
+
+  function pannello(src,titolo,fonte,url){
+    gal.textContent='';
+    const x=document.createElement('div');x.className='x';x.textContent='×';
+    const img=document.createElement('img');img.src=src;img.alt=titolo;
+    const cap=document.createElement('div');cap.style.cssText='margin-top:6px;font-weight:600';cap.textContent=titolo;
+    const f=document.createElement('div');f.style.cssText='margin-top:2px;opacity:.85';
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=fonte+' ↗';
+    f.appendChild(a);
+    gal.append(x,img,cap,f);
+    gal.style.display='block';
+  }
+
+  async function json(u){
+    const ac=new AbortController();
+    const to=setTimeout(()=>ac.abort(),15000);
+    try{
+      const r=await fetch(u,{signal:ac.signal});
+      if(!r.ok)throw new Error(r.status);
+      return await r.json();
+    }finally{clearTimeout(to);}
+  }
+  function elenco(j){
+    return j.query&&j.query.pages?Object.values(j.query.pages).sort((a,b)=>a.index-b.index):[];
+  }
+  async function cerca(term){
+    const enc=encodeURIComponent(term);
+    let j=await json('https://it.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch='+enc+'&gsrlimit=3&prop=pageimages|info&piprop=thumbnail&pithumbsize=900&inprop=url&format=json&origin=*');
+    const p=elenco(j).find(x=>x.thumbnail);
+    if(p)return {src:p.thumbnail.source,titolo:p.title,fonte:'Wikipedia',url:p.fullurl};
+    j=await json('https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch='+enc+'&gsrlimit=3&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900&format=json&origin=*');
+    const f=elenco(j).find(x=>x.imageinfo&&x.imageinfo[0].thumburl);
+    if(f){
+      const ii=f.imageinfo[0];
+      const lic=ii.extmetadata&&ii.extmetadata.LicenseShortName?ii.extmetadata.LicenseShortName.value:'';
+      return {src:ii.thumburl,titolo:f.title.replace(/^File:/,'').replace(/\.[a-z]+$/i,''),fonte:'Wikimedia Commons'+(lic?' · '+lic:''),url:ii.descriptionurl};
+    }
+    return null;
+  }
+
+  function termine(q){
+    if(window._foto)return null;
+    const m=q.trim().match(/^(?:jarvis[,:]?\s+)?(?:mostrami|mostra|fammi vedere|voglio vedere)\s+(.{2,})$/i);
+    if(!m)return null;
+    let t=m[1].trim().replace(/[.!?\s]+$/,'');
+    if(/meteo|tempo|notizi|ricord|memoria|timer|foto che/i.test(t))return null;
+    t=t.replace(/^(?:una|un|la|le|il|lo|delle|alcune)?\s*(?:foto|fotografia|immagine|immagini)\s+(?:di|del|dello|della|dei|degli|delle|dell'|d')\s*/i,'');
+    t=t.replace(/^(?:il|lo|la|le|l'|gli|i|un|una|uno|un')\s*/i,'');
+    return t.length>=2?t:null;
+  }
+
+  async function mostra(t){
+    const nome=store.get('nome')||'signore';
+    setState('thinking');
+    $('text').textContent='Cerco: '+t+'…';
+    let msg;
+    try{
+      const r=await cerca(t);
+      if(r){
+        pannello(r.src,r.titolo,r.fonte,r.url);
+        msg='Ecco, '+nome+': '+r.titolo+'.';
+      }else{
+        msg='Non trovo immagini per '+t+', '+nome+'.';
+      }
+      $('text').textContent=msg;
+    }catch(e){
+      msg='Non riesco a cercare immagini ora, '+nome+'.';
+      $('text').textContent=msg+' ('+e.message+')';
+    }
+    setState('idle');
+    speak(msg);
+  }
+
+  const askPrima=ask;
+  ask=async function(q){
+    const t=termine(q);
+    if(t){await mostra(t);return;}
+    return askPrima(q);
+  };
+})();
+</script>
 
 </body>
 </html>
