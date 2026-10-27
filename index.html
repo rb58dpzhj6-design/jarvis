@@ -548,6 +548,90 @@ async function ask(q){
   $('text').textContent=s+', '+(store.get('nome')||'signore')+'.';
 })();
 </script>
+<script>
+(function(){
+  const MAX=60;
+  function leggi(){
+    try{const m=JSON.parse(store.get('memoria')||'[]');return Array.isArray(m)?m:[];}catch(e){return [];}
+  }
+  function scrivi(m){store.set('memoria',JSON.stringify(m.slice(-MAX)));}
+  function nome(){return store.get('nome')||'signore';}
+
+  window.memoriaTesto=function(){
+    const m=leggi();
+    if(!m.length)return '';
+    return ' MEMORIA: queste sono informazioni personali che l\'utente ti ha chiesto di ricordare su di lui (parlano in prima persona dell\'utente). Usale quando sono utili, senza elencarle se non richiesto: '+m.map((x,i)=>(i+1)+') '+x).join(' ')+'.';
+  };
+
+  const persona0=(typeof persona==='function')?persona:function(){return '';};
+  persona=function(){return persona0()+window.memoriaTesto();};
+
+  const STOP=['che','del','dei','della','delle','mio','mia','miei','mie','sul','per','con','una','uno','gli','nel','alla','dal','dai','sono','come'];
+
+  function comando(q){
+    const t=q.trim();
+    let m;
+    if((m=t.match(/^(?:jarvis[,:]?\s+)?(?:ricorda(?:ti)?|memorizza|tieni a mente|segnati)\s*(?:che|:)?\s+(.{3,})$/i))){
+      let f=m[1].trim().replace(/[.!\s]+$/,'');
+      if(f.length>200)f=f.slice(0,200);
+      const mem=leggi();
+      if(!mem.some(x=>x.toLowerCase()===f.toLowerCase()))mem.push(f);
+      scrivi(mem);
+      return 'Annotato, '+nome()+'. Lo terrò a mente.';
+    }
+    if((m=t.match(/^(?:jarvis[,:]?\s+)?(?:dimentica(?:ti)?|cancella dalla memoria|elimina dalla memoria)\s*(?:che|di|:)?\s+(.{2,})$/i))){
+      const arg=m[1].trim().toLowerCase().replace(/[.!\s]+$/,'');
+      if(/^(tutto|ogni cosa|tutta la memoria)$/.test(arg)){
+        if(confirm('Cancello tutta la memoria di Jarvis?')){scrivi([]);return 'Memoria cancellata, '+nome()+'.';}
+        return 'Come desidera, non ho cancellato nulla.';
+      }
+      const parole=(arg.match(/[a-zàèéìòù0-9]{3,}/g)||[]).filter(p=>STOP.indexOf(p)<0);
+      if(!parole.length)return 'Mi dica cosa devo dimenticare, '+nome()+'.';
+      const mem=leggi();
+      const resto=mem.filter(x=>!parole.some(p=>x.toLowerCase().includes(p)));
+      const n=mem.length-resto.length;
+      scrivi(resto);
+      return n?('Fatto, ho dimenticato '+n+(n===1?' cosa.':' cose.')):'Non trovo nulla di simile nei miei ricordi.';
+    }
+    if(/\b(?:cosa|che cosa|quali cose)\s+(?:ricordi|sai\s+(?:di|su)\s+me|ti ho (?:detto|chiesto di ricordare))/i.test(t)){
+      const mem=leggi();
+      if(!mem.length)return 'Per ora non ricordo nulla di particolare, '+nome()+'.';
+      return 'Ecco cosa ricordo, '+nome()+'. '+mem.map((x,i)=>(i+1)+': '+x).join('. ')+'.';
+    }
+    return null;
+  }
+
+  function salvaStoria(){
+    try{
+      let h=history.slice(-12);
+      while(h.length&&h[0].role!=='user')h.shift();
+      store.set('hist',JSON.stringify(h));
+    }catch(e){}
+  }
+  try{
+    const h=JSON.parse(store.get('hist')||'[]');
+    if(Array.isArray(h)&&!history.length)h.forEach(x=>history.push(x));
+  }catch(e){}
+
+  const ask0=ask;
+  ask=async function(q){
+    const r=comando(q);
+    if(r){
+      $('text').textContent=r;
+      setState('idle');
+      speak(r);
+      return;
+    }
+    await ask0(q);
+    salvaStoria();
+  };
+
+  const lab=document.createElement('div');
+  lab.style.cssText='position:fixed;left:16px;top:calc(env(safe-area-inset-top) + 150px);z-index:3;pointer-events:none;font:11px ui-monospace,Menlo,monospace;letter-spacing:1.5px;text-transform:uppercase;color:#7fdcff;opacity:.85';
+  document.body.appendChild(lab);
+  setInterval(()=>{const n=leggi().length;lab.textContent='Memoria '+n+(n===1?' ricordo':' ricordi');},1000);
+})();
+</script>
 
 </body>
 </html>
