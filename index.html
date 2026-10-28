@@ -1135,52 +1135,6 @@ function setCity(){
 })();
 })();
 </script>
-<script>
-(function(){
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(!SR)return;
-let rec=null,on=false,busy=false;
-function inZone(e){
-  const x=e.clientX,y=e.clientY,W=innerWidth,H=innerHeight;
-  return Math.abs(x-W/2)<W*.4&&y>H*.16&&y<H*.7;
-}
-function send(txt){
-  const i=document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea'),s=document.getElementById('send');
-  if(!i||!s||!txt)return;
-  i.value=txt;i.dispatchEvent(new Event('input',{bubbles:true}));s.click();
-}
-function start(){
-  if(!on||busy)return;
-  try{rec&&(rec.onend=null,rec.abort());}catch(e){}
-  try{
-    rec=new SR();rec.lang='it-IT';rec.continuous=true;rec.interimResults=false;
-    rec.onresult=e=>{
-      for(let i=e.resultIndex;i<e.results.length;i++){
-        if(!e.results[i].isFinal)continue;
-        const t=e.results[i][0].transcript.trim();
-        if(t.length>1)send(t);
-      }
-    };
-    rec.onend=()=>{if(on&&!busy)setTimeout(start,350);};
-    rec.start();
-  }catch(e){setTimeout(start,1000);}
-}
-function stop(){try{rec&&(rec.onend=null,rec.abort());}catch(e){}rec=null;}
-document.addEventListener('click',function(e){
-  const t=e.target;
-  if(!t||t.tagName!=='CANVAS'||!inZone(e))return;
-  e.stopImmediatePropagation();e.preventDefault();
-  on=!on;
-  if(on){busy=false;start();}else stop();
-},true);
-setInterval(()=>{
-  if(!on)return;
-  const sp=speechSynthesis.speaking;
-  if(sp&&!busy){busy=true;stop();}
-  else if(!sp&&busy){busy=false;setTimeout(start,600);}
-},300);
-})();
-</script>
 
 </body>
 </html>
