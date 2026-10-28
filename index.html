@@ -832,6 +832,64 @@ async function ask(q){
   };
 })();
 </script>
+<script>
+(function(){
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR)return;
+const WORDS=/\b(jarvis|giarvis|jarvys|garvis|jarves|giarvi|jarvi)\b/i;
+let rec=null,on=false,armed=false,armT=0,lock=null,busy=false;
+const b=document.createElement('button');
+b.textContent='👂';b.title='Parola di attivazione: Jarvis';
+b.style.cssText='position:fixed;left:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));width:48px;height:48px;border-radius:50%;border:1px solid #38e8ff;background:rgba(0,20,30,.7);color:#38e8ff;font-size:22px;z-index:9999;opacity:.7';
+document.body.appendChild(b);
+const st=document.createElement('div');
+st.style.cssText='position:fixed;left:70px;bottom:calc(26px + env(safe-area-inset-bottom,0px));font:12px monospace;color:#38e8ff;z-index:9999;display:none';
+document.body.appendChild(st);
+function msg(t){st.textContent=t;st.style.display=t?'block':'none';}
+function inputEl(){return document.querySelector('input[type=text],input:not([type]),textarea');}
+function send(txt){
+  const i=inputEl(),s=document.getElementById('send');
+  if(!i||!s||!txt)return;
+  i.value=txt;i.dispatchEvent(new Event('input',{bubbles:true}));s.click();
+}
+function say(t){
+  try{const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);}catch(e){}
+}
+function handle(text){
+  const m=text.match(WORDS);
+  if(m){
+    const rest=text.slice(m.index+m[0].length).replace(/^[\s,.:;!?-]+/,'').trim();
+    if(rest.length>2){armed=false;send(rest);}
+    else{armed=true;clearTimeout(armT);armT=setTimeout(()=>{armed=false;msg('👂 dì "Jarvis"');},9000);say('Sì, signore?');msg('🎙 ti ascolto…');}
+  }else if(armed&&text.trim().length>2){armed=false;clearTimeout(armT);send(text.trim());}
+}
+function start(){
+  if(!on||busy)return;
+  try{
+    rec=new SR();rec.lang='it-IT';rec.continuous=true;rec.interimResults=false;
+    rec.onresult=e=>{
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal)handle(e.results[i][0].transcript);
+      }
+    };
+    rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){on=false;upd();msg('microfono negato');}};
+    rec.onend=()=>{if(on&&!busy)setTimeout(start,400);};
+    rec.start();
+  }catch(e){setTimeout(start,1000);}
+}
+function stop(){try{rec&&(rec.onend=null,rec.abort());}catch(e){}rec=null;}
+function upd(){b.style.opacity=on?1:.7;b.style.background=on?'rgba(0,120,140,.8)':'rgba(0,20,30,.7)';if(on&&!armed)msg('👂 dì "Jarvis"');if(!on)msg('');}
+async function wl(){try{if(on&&navigator.wakeLock)lock=await navigator.wakeLock.request('screen');else if(lock){lock.release();lock=null;}}catch(e){}}
+b.onclick=()=>{on=!on;upd();wl();if(on)start();else{stop();armed=false;}};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&on){wl();stop();start();}});
+setInterval(()=>{
+  if(!on)return;
+  const sp=speechSynthesis.speaking;
+  if(sp&&!busy){busy=true;stop();msg('🔊 …');}
+  else if(!sp&&busy){busy=false;upd();setTimeout(start,500);}
+},300);
+})();
+</script>
 
 </body>
 </html>
