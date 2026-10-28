@@ -849,10 +849,10 @@ document.body.appendChild(toast);
 let tt=0;
 function note(t){toast.textContent=t;toast.style.display='block';clearTimeout(tt);tt=setTimeout(()=>toast.style.display='none',4000);}
 const btn=document.createElement('button');
-btn.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 88px);padding:7px 12px;border-radius:999px;border:1px solid rgba(120,200,255,.6);background:rgba(10,30,50,.7);color:#bfe6ff;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.14em;z-index:9999';
+btn.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 121px);padding:7px 12px;border-radius:999px;border:1px solid rgba(120,200,255,.6);background:rgba(10,30,50,.7);color:#bfe6ff;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.14em;z-index:9999';
 document.body.appendChild(btn);
 const pan=document.createElement('div');
-pan.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 126px);width:min(92vw,340px);max-height:52vh;display:none;flex-direction:column;padding:12px;border-radius:14px;border:1px solid rgba(120,200,255,.5);background:rgba(4,16,28,.97);box-shadow:0 12px 40px rgba(0,0,0,.6);color:#dff3ff;font-family:-apple-system,Helvetica,sans-serif;z-index:10000';
+pan.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 158px);width:min(92vw,340px);max-height:52vh;display:none;flex-direction:column;padding:12px;border-radius:14px;border:1px solid rgba(120,200,255,.5);background:rgba(4,16,28,.97);box-shadow:0 12px 40px rgba(0,0,0,.6);color:#dff3ff;font-family:-apple-system,Helvetica,sans-serif;z-index:10000';
 pan.innerHTML='<div id="agL" style="overflow:auto;min-height:0;flex:1"></div><div style="display:flex;gap:8px;margin-top:10px"><input id="agI" type="text" placeholder="Nuovo impegno…" style="flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid rgba(120,200,255,.5);background:#061a2c;color:#fff;font-size:16px"><button id="agA" style="padding:10px 14px;border-radius:10px;border:0;background:#4aa8dc;color:#001018;font-weight:700;font-size:14px">+</button></div>';
 document.body.appendChild(pan);
 function lab(){const n=load().filter(x=>!x.done).length;btn.textContent='📅 AGENDA'+(n?' · '+n:'')+(pan.style.display==='flex'?' ▴':' ▾');}
