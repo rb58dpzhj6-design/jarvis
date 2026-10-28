@@ -834,60 +834,99 @@ async function ask(q){
 </script>
 <script>
 (function(){
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(!SR)return;
-const WORDS=/\b(jarvis|giarvis|jarvys|garvis|jarves|giarvi|jarvi)\b/i;
-let rec=null,on=false,armed=false,armT=0,lock=null,busy=false;
-const b=document.createElement('button');
-b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));padding:12px 22px;border-radius:999px;border:1.5px solid #38e8ff;background:rgba(0,20,30,.85);color:#38e8ff;font:600 15px -apple-system,Helvetica,sans-serif;letter-spacing:.08em;z-index:9999;box-shadow:0 0 18px rgba(56,232,255,.35);white-space:nowrap';
-document.body.appendChild(b);
-const st=document.createElement('div');
-st.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0px));font:12px monospace;color:#38e8ff;z-index:9999;display:none;text-align:center';
-document.body.appendChild(st);
-function msg(t){st.textContent=t;st.style.display=t?'block':'none';}
-function inputEl(){return document.querySelector('input[type=text],input:not([type]),textarea');}
-function send(txt){
-  const i=inputEl(),s=document.getElementById('send');
-  if(!i||!s||!txt)return;
-  i.value=txt;i.dispatchEvent(new Event('input',{bubbles:true}));s.click();
-}
+const KEY='agenda';
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch(e){return [];}}
+function save(a){try{localStorage.setItem(KEY,JSON.stringify(a));}catch(e){}}
 function say(t){
-  try{const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);}catch(e){}
-}
-function handle(text){
-  const m=text.match(WORDS);
-  if(m){
-    const rest=text.slice(m.index+m[0].length).replace(/^[\s,.:;!?-]+/,'').trim();
-    if(rest.length>2){armed=false;send(rest);}
-    else{armed=true;clearTimeout(armT);armT=setTimeout(()=>{armed=false;msg('👂 dì "Jarvis"');},9000);say('Dimmi, signore');msg('🎙 ti ascolto…');}
-  }else if(armed&&text.trim().length>2){armed=false;clearTimeout(armT);send(text.trim());}
-}
-function start(){
-  if(!on||busy)return;
   try{
-    rec=new SR();rec.lang='it-IT';rec.continuous=true;rec.interimResults=false;
-    rec.onresult=e=>{
-      for(let i=e.resultIndex;i<e.results.length;i++){
-        if(e.results[i].isFinal)handle(e.results[i][0].transcript);
-      }
-    };
-    rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){on=false;upd();msg('microfono negato');}};
-    rec.onend=()=>{if(on&&!busy)setTimeout(start,400);};
-    rec.start();
-  }catch(e){setTimeout(start,1000);}
+    if(typeof window.speak==='function'){window.speak(t);return;}
+    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+  }catch(e){}
 }
-function stop(){try{rec&&(rec.onend=null,rec.abort());}catch(e){}rec=null;}
-function upd(){b.textContent=on?'🎙 ASCOLTO ATTIVO':'👂 ATTIVA "JARVIS"';b.style.background=on?'rgba(0,140,160,.9)':'rgba(0,20,30,.85)';b.style.color=on?'#fff':'#38e8ff';if(on&&!armed)msg('👂 dì "Jarvis"');if(!on)msg('');}
-async function wl(){try{if(on&&navigator.wakeLock)lock=await navigator.wakeLock.request('screen');else if(lock){lock.release();lock=null;}}catch(e){}}
-upd();
-b.onclick=()=>{on=!on;upd();wl();if(on)start();else{stop();armed=false;}};
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&on){wl();stop();start();}});
-setInterval(()=>{
-  if(!on)return;
-  const sp=speechSynthesis.speaking;
-  if(sp&&!busy){busy=true;stop();msg('🔊 …');}
-  else if(!sp&&busy){busy=false;upd();setTimeout(start,500);}
-},300);
+const toast=document.createElement('div');
+toast.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:62%;max-width:88%;padding:10px 16px;border-radius:12px;background:rgba(0,30,40,.95);border:1px solid #38e8ff;color:#dff9ff;font:14px -apple-system,Helvetica,sans-serif;z-index:10001;display:none;text-align:center';
+document.body.appendChild(toast);
+let tt=0;
+function note(t){toast.textContent=t;toast.style.display='block';clearTimeout(tt);tt=setTimeout(()=>toast.style.display='none',4000);}
+const btn=document.createElement('button');
+btn.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 88px);padding:7px 12px;border-radius:999px;border:1px solid rgba(120,200,255,.6);background:rgba(10,30,50,.7);color:#bfe6ff;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.14em;z-index:9999';
+document.body.appendChild(btn);
+const pan=document.createElement('div');
+pan.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 126px);width:min(92vw,340px);max-height:52vh;display:none;flex-direction:column;padding:12px;border-radius:14px;border:1px solid rgba(120,200,255,.5);background:rgba(4,16,28,.97);box-shadow:0 12px 40px rgba(0,0,0,.6);color:#dff3ff;font-family:-apple-system,Helvetica,sans-serif;z-index:10000';
+pan.innerHTML='<div id="agL" style="overflow:auto;min-height:0;flex:1"></div><div style="display:flex;gap:8px;margin-top:10px"><input id="agI" type="text" placeholder="Nuovo impegno…" style="flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid rgba(120,200,255,.5);background:#061a2c;color:#fff;font-size:16px"><button id="agA" style="padding:10px 14px;border-radius:10px;border:0;background:#4aa8dc;color:#001018;font-weight:700;font-size:14px">+</button></div>';
+document.body.appendChild(pan);
+function lab(){const n=load().filter(x=>!x.done).length;btn.textContent='📅 AGENDA'+(n?' · '+n:'')+(pan.style.display==='flex'?' ▴':' ▾');}
+const L=pan.querySelector('#agL'),I=pan.querySelector('#agI');
+function render(){
+  const a=load();L.textContent='';lab();
+  if(!a.length){const e=document.createElement('div');e.style.cssText='opacity:.6;padding:8px 0;font-size:14px';e.textContent='Nessun impegno. Dì: "Appunta dentista domani alle 10 in agenda".';L.appendChild(e);return;}
+  a.forEach((x,i)=>{
+    const r=document.createElement('div');
+    r.style.cssText='display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(56,232,255,.2)';
+    const c=document.createElement('button');
+    c.textContent=x.done?'☑':'☐';c.style.cssText='background:none;border:0;color:#38e8ff;font-size:24px';
+    c.onclick=()=>{const b=load();b[i].done=!b[i].done;save(b);render();};
+    const t=document.createElement('div');
+    t.style.cssText='flex:1;min-width:0;font-size:16px;word-break:break-word;'+(x.done?'text-decoration:line-through;opacity:.5':'');
+    t.textContent=x.t;
+    const d=document.createElement('button');
+    d.textContent='✕';d.style.cssText='background:none;border:0;color:#ff6b6b;font-size:20px';
+    d.onclick=()=>{const b=load();b.splice(i,1);save(b);render();};
+    r.append(c,t,d);L.appendChild(r);
+  });
+}
+function openP(){render();pan.style.display='flex';lab();}
+btn.onclick=()=>{if(pan.style.display==='flex'){pan.style.display='none';lab();}else openP();};
+document.addEventListener('click',function(e){if(pan.style.display==='flex'&&!pan.contains(e.target)&&e.target!==btn){pan.style.display='none';lab();}});
+function add(t){const a=load();a.push({t:t,done:false,ts:Date.now()});save(a);}
+pan.querySelector('#agA').onclick=()=>{const v=I.value.trim();if(v){add(v);I.value='';render();}};
+lab();
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function handle(raw){
+  let q=String(raw||'').trim();if(!q)return false;
+  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
+  const low=q.toLowerCase().replace(/[.!?]+$/,'');
+  let m;
+  const isAdd=/^(appunta|appunto|apunta|segna|aggiungi|scrivi|metti|inserisci)/i.test(q);
+  if(!isAdd&&/\b(impegni|agenda|appuntamenti)\b/.test(low)&&!/^(svuota|cancella|elimina|togli|rimuovi)/.test(low)){
+    const a=load().filter(x=>!x.done);
+    if(!a.length)say('La sua agenda è vuota, signore.');
+    else say('In agenda ha '+a.length+(a.length==1?' impegno: ':' impegni: ')+a.map(x=>x.t).join('. '));
+    openP();return true;
+  }
+  if(/^(svuota|cancella tutta|elimina tutta)\b.*\bagenda\b/.test(low)){save([]);render();note('Agenda svuotata');say('Agenda svuotata, signore.');return true;}
+  m=low.match(/^(?:cancella|elimina|togli|rimuovi)\s+(.+?)(?:\s+(?:dall'|dalla|dall)\s*agenda)?$/);
+  if(m&&/agenda/.test(low)){
+    const w=m[1].trim(),a=load(),i=a.findIndex(x=>x.t.toLowerCase().includes(w));
+    if(i>=0){const r=a.splice(i,1)[0];save(a);render();note('Rimosso: '+r.t);say('Rimosso dall\'agenda, signore.');}
+    else say('Non trovo questo impegno in agenda, signore.');
+    return true;
+  }
+  m=q.match(/^(?:appunta(?:mi|re)?|appunto|apunta|segna(?:mi|re)?|aggiungi|scrivi|metti|inserisci)\s+(.+)$/i);
+  if(m&&(/^appunt|^apunta/i.test(q)||/agenda/i.test(q))){
+    let t=m[1].replace(/[\s,]*(?:in|sull'|sulla|nell'|nella|su|alla|all')\s*agenda\s*$/i,'').replace(/^(?:in|sull'|nell')\s*agenda[\s:,-]+/i,'').replace(/[.!?]+$/,'').trim();
+    if(t.length<2)return false;
+    t=cap(t);add(t);render();note('📅 Appuntato: '+t);say('Fatto, signore. Ho appuntato: '+t);return true;
+  }
+  return false;
+}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sendBtn=document.getElementById('send');
+if(sendBtn){
+  sendBtn.addEventListener('click',function(ev){
+    const i=grabInput();if(!i)return;
+    if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+  },true);
+}
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter')return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+if(typeof window.ask==='function'){
+  const _ask=window.ask;
+  window.ask=function(q){if(typeof q==='string'&&handle(q))return;return _ask.apply(this,arguments);};
+}
 })();
 </script>
 
