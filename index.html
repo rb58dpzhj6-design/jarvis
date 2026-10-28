@@ -1028,6 +1028,113 @@ if(typeof window.ask==='function'){
 }
 })();
 </script>
+<script>
+(function(){
+function jget(u,ms){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||7000);
+  return fetch(u,{signal:c.signal}).then(r=>{clearTimeout(t);if(!r.ok)throw 0;return r.json();});
+}
+function lsGet(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+function agenda(){try{return JSON.parse(localStorage.getItem('agenda')||'[]').filter(x=>!x.done);}catch(e){return [];}}
+const WC=[[[0],'cielo sereno'],[[1,2],'poco nuvoloso'],[[3],'coperto'],[[45,48],'nebbia'],[[51,53,55,56,57],'pioggerella'],[[61,63,65,66,67],'pioggia'],[[71,73,75,77,85,86],'neve'],[[80,81,82],'rovesci'],[[95,96,99],'temporale']];
+function wdesc(c){for(const [a,d] of WC)if(a.includes(c))return d;return '';}
+function saluto(){const h=new Date().getHours();return h<5?'Buonanotte':h<13?'Buongiorno':h<18?'Buon pomeriggio':'Buonasera';}
+async function meteo(){
+  const city=lsGet('city');if(!city)return null;
+  try{
+    const g=await jget('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=1&language=it');
+    const p=g.results&&g.results[0];if(!p)return null;
+    const w=await jget('https://api.open-meteo.com/v1/forecast?latitude='+p.latitude+'&longitude='+p.longitude+'&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FRome&forecast_days=1');
+    const n=Math.round(w.current.temperature_2m),d=wdesc(w.current.weather_code);
+    const mn=Math.round(w.daily.temperature_2m_min[0]),mx=Math.round(w.daily.temperature_2m_max[0]);
+    const pr=w.daily.precipitation_probability_max&&w.daily.precipitation_probability_max[0];
+    let s='Meteo per '+(p.name||city)+': adesso '+n+' gradi'+(d?', '+d:'')+'. Oggi minima '+mn+', massima '+mx+'.';
+    if(pr!=null&&pr>=40)s+=' Probabilità di pioggia '+pr+' per cento: porti l\'ombrello, signore.';
+    return s;
+  }catch(e){return null;}
+}
+const card=document.createElement('div');
+card.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 160px);width:min(92vw,380px);max-height:58vh;overflow:auto;padding:16px;border-radius:14px;border:1px solid rgba(120,200,255,.5);background:rgba(4,16,28,.97);box-shadow:0 12px 40px rgba(0,0,0,.6);color:#dff3ff;font:15px/1.5 -apple-system,Helvetica,sans-serif;z-index:10002;display:none';
+document.body.appendChild(card);
+card.addEventListener('click',()=>{card.style.display='none';try{speechSynthesis.cancel();}catch(e){}});
+function show(lines){
+  card.textContent='';
+  const h=document.createElement('div');h.textContent='BRIEFING';h.style.cssText='font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.2em;color:#7fd0ff;margin-bottom:8px';
+  card.appendChild(h);
+  lines.forEach(l=>{const p=document.createElement('div');p.textContent=l;p.style.marginBottom='8px';card.appendChild(p);});
+  const f=document.createElement('div');f.textContent='tocca per chiudere';f.style.cssText='font-size:11px;opacity:.5';card.appendChild(f);
+  card.style.display='block';
+}
+function speakAll(lines){
+  try{
+    speechSynthesis.cancel();
+    lines.forEach(l=>{
+      l.split(/(?<=[.!?])\s+/).forEach(s=>{
+        if(!s.trim())return;
+        const u=new SpeechSynthesisUtterance(s);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+      });
+    });
+  }catch(e){}
+}
+let running=false;
+async function briefing(){
+  if(running)return;running=true;
+  const now=new Date();
+  const data=now.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+  const L=[];
+  L.push(saluto()+', signore. Oggi è '+data+'.');
+  show(L.concat(['Sto raccogliendo i dati…']));
+  try{const z=new SpeechSynthesisUtterance(' ');z.volume=0;speechSynthesis.speak(z);}catch(e){}
+  const m=await meteo();
+  if(m)L.push(m);
+  else if(!lsGet('city'))L.push('Non ho una località preferita per il meteo: la imposti dalla rotella, quarta pagina.');
+  else L.push('Il meteo non è raggiungibile in questo momento.');
+  const a=agenda();
+  if(!a.length)L.push('In agenda oggi non ha impegni.');
+  else L.push('In agenda ha '+a.length+(a.length==1?' impegno: ':' impegni: ')+a.map(x=>x.t).join('. ')+'.');
+  L.push('Ha bisogno di altro, signore?');
+  show(L);speakAll(L);running=false;
+}
+function handle(raw){
+  let q=String(raw||'').trim().toLowerCase().replace(/[.!?,]+/g,' ').replace(/\s+/g,' ').trim();
+  q=q.replace(/^(ehi |ciao )?(jarvis|giarvis|garvis) ?/,'');
+  if(/^(buongiorno|buon giorno)( jarvis| signore)?$/.test(q)||/\b(briefing|riepilogo (della |di )?(giornata|oggi)|com e la giornata|che programma ho oggi|che giornata ho)\b/.test(q)){briefing();return true;}
+  return false;
+}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sb=document.getElementById('send');
+if(sb)sb.addEventListener('click',function(ev){
+  const i=grabInput();if(!i)return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter')return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+if(typeof window.ask==='function'){
+  const _a=window.ask;
+  window.ask=function(q){if(typeof q==='string'&&handle(q))return;return _a.apply(this,arguments);};
+}
+
+// 4a pagina della rotella: località preferita per il meteo
+function gearBtn(){return Array.from(document.querySelectorAll('button')).find(b=>/⚙/.test(b.textContent||''));}
+function setCity(){
+  const cur=lsGet('city');
+  const v=prompt('4/4 - Località preferita per il meteo (es. Andria). Lascia vuoto per non cambiare.',cur||'');
+  if(v===null||!v.trim())return;
+  const name=v.trim();
+  try{localStorage.setItem('city',name);}catch(e){}
+  jget('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(name)+'&count=1&language=it')
+    .then(g=>{const p=g.results&&g.results[0];alert(p?'Località impostata: '+p.name+(p.admin1?' ('+p.admin1+')':''):'Salvata "'+name+'", ma non la trovo sulla mappa: controlla il nome.');})
+    .catch(()=>alert('Località salvata: '+name));
+}
+(function(){
+  const g=gearBtn();
+  if(g)g.addEventListener('click',function(){setTimeout(setCity,50);},true);
+})();
+})();
+</script>
 
 </body>
 </html>
