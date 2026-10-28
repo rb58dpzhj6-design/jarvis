@@ -1135,6 +1135,74 @@ function setCity(){
 })();
 })();
 </script>
+<script>
+(function(){
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR)return;
+let rec=null,on=false,busy=false,lock=null,lastStart=0;
+const pill=document.createElement('div');
+pill.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));padding:7px 14px;border-radius:999px;border:1px solid #38e8ff;background:rgba(0,30,44,.9);color:#bff4ff;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.12em;z-index:9990;display:none;white-space:nowrap';
+document.body.appendChild(pill);
+function msg(t){pill.textContent=t;pill.style.display=t?'block':'none';}
+function orbCanvas(){
+  const cs=Array.from(document.querySelectorAll('canvas'));
+  return cs;
+}
+function glow(v){orbCanvas().forEach(c=>{try{const r=c.getBoundingClientRect();if(r.width<innerWidth*.98||r.height<innerHeight*.7)c.style.filter=v?'drop-shadow(0 0 22px #38e8ff)':'';}catch(e){}});}
+function inZone(e){
+  const x=e.clientX,y=e.clientY,W=innerWidth,H=innerHeight;
+  return Math.abs(x-W/2)<W*.4&&y>H*.16&&y<H*.7;
+}
+function inputEl(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+function send(txt){
+  const i=inputEl(),s=document.getElementById('send');
+  if(!i||!s||!txt)return;
+  i.value=txt;i.dispatchEvent(new Event('input',{bubbles:true}));s.click();
+}
+function start(){
+  if(!on||busy)return;
+  try{rec&&(rec.onend=null,rec.abort());}catch(e){}
+  try{
+    rec=new SR();rec.lang='it-IT';rec.continuous=true;rec.interimResults=false;
+    lastStart=Date.now();
+    rec.onstart=()=>{msg('🎙 ASCOLTO ATTIVO · tocca il cerchio per fermare');};
+    rec.onresult=e=>{
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(!e.results[i].isFinal)continue;
+        const t=e.results[i][0].transcript.trim();
+        if(t.length<2)continue;
+        if(/^(stop|basta|smetti di ascoltare|silenzio)\.?$/i.test(t)){turn(false);return;}
+        send(t);
+      }
+    };
+    rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){on=false;glow(false);msg('microfono negato: controlla le impostazioni di Safari');setTimeout(()=>msg(''),4000);}};
+    rec.onend=()=>{if(on&&!busy)setTimeout(start,350);};
+    rec.start();
+  }catch(e){setTimeout(start,1000);}
+}
+function stop(){try{rec&&(rec.onend=null,rec.abort());}catch(e){}rec=null;}
+async function wl(){try{if(on&&navigator.wakeLock)lock=await navigator.wakeLock.request('screen');else if(lock){lock.release();lock=null;}}catch(e){}}
+function turn(v){
+  on=v;glow(on);wl();
+  if(on){busy=false;try{speechSynthesis.cancel();}catch(e){}msg('🎙 avvio ascolto…');start();}
+  else{stop();msg('ascolto fermato');setTimeout(()=>{if(!on)msg('');},1500);}
+}
+document.addEventListener('click',function(e){
+  const t=e.target;
+  if(!t||t.tagName!=='CANVAS'||!inZone(e))return;
+  e.stopImmediatePropagation();e.preventDefault();
+  turn(!on);
+},true);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&on){wl();stop();start();}});
+setInterval(()=>{
+  if(!on)return;
+  const sp=speechSynthesis.speaking;
+  if(sp&&!busy){busy=true;stop();msg('🔊 Jarvis parla…');}
+  else if(!sp&&busy){busy=false;setTimeout(start,600);}
+  else if(!busy&&Date.now()-lastStart>20000&&!rec){start();}
+},300);
+})();
+</script>
 
 </body>
 </html>
