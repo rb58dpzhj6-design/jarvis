@@ -1372,6 +1372,53 @@ setInterval(banda,4000);
 addEventListener('resize',function(){setTimeout(banda,150);});
 })();
 </script>
+<script>
+(function(){
+function say(t){
+  try{
+    if(typeof window.speak==='function'){window.speak(t);return;}
+    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+  }catch(e){}
+}
+function cosa(raw){
+  let q=String(raw||'').trim();
+  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
+  let low=q.toLowerCase().replace(/[.!?]+$/,'').trim();
+  if(!/\b(vicin[oaie]|qui intorno|nei dintorni|attorno a me|intorno a me|a due passi)\b/.test(low))return null;
+  if(!/^(dov['’ ]?\s?è|dove\s+(è|c['’]è|si trova|posso|trovo)|trova|trovami|cerca|cercami|c['’]è|ci sono|indicami|mostrami|portami|sai dov['’]è)/.test(low))return null;
+  low=low
+    .replace(/^(sai\s+)?(dov['’ ]?\s?è|dove\s+(è|c['’]è|si trova|posso (?:trovare|mangiare|comprare|prendere|fare)|trovo)|trovami|trova|cercami|cerca|c['’]è|ci sono|indicami|mostrami|portami)\s*/,'')
+    .replace(/\b(il più vicino|la più vicina|i più vicini|le più vicine|più vicino|più vicina|più vicini|più vicine)\b/g,'')
+    .replace(/\b(qui vicino|vicino a me|vicino|qui intorno|nei dintorni|attorno a me|intorno a me|a due passi da me|a due passi|da qui)\b/g,'')
+    .replace(/^(una|uno|un'|un|il|lo|la|l'|i|gli|le|dei|delle|degli|del|della)\s*/,'')
+    .replace(/\s+/g,' ').trim();
+  return low.length>=3?low:null;
+}
+function handle(raw){
+  const c=cosa(raw);if(!c)return false;
+  say('Cerco '+c+' vicino a lei, signore.');
+  setTimeout(function(){location.href='https://maps.apple.com/?q='+encodeURIComponent(c);},1800);
+  return true;
+}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sendBtn=document.getElementById('send');
+if(sendBtn){
+  sendBtn.addEventListener('click',function(ev){
+    const i=grabInput();if(!i)return;
+    if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+  },true);
+}
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter')return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+if(typeof window.ask==='function'){
+  const _ask=window.ask;
+  window.ask=function(q){if(typeof q==='string'&&handle(q))return;return _ask.apply(this,arguments);};
+}
+})();
+</script>
 
 </body>
 </html>
