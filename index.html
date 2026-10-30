@@ -1307,6 +1307,32 @@ requestAnimationFrame(frame);
 }catch(e){try{console.warn('HUD',e);}catch(x){}}
 })();
 </script>
+<style id="neroFix">
+html,body{background:#000!important;background-image:none!important}
+html::before,html::after,body::before,body::after,body>*::before,body>*::after{background-image:none!important}
+</style>
+<script>
+(function(){
+function nero(){
+  try{
+    var W=innerWidth,H=innerHeight;
+    document.querySelectorAll('body *').forEach(function(e){
+      if(/^(CANVAS|INPUT|BUTTON|TEXTAREA|SELECT|IMG|SVG|SCRIPT|STYLE)$/i.test(e.tagName))return;
+      var cs=getComputedStyle(e);
+      if(cs.backgroundImage&&cs.backgroundImage!=='none'){
+        var r=e.getBoundingClientRect();
+        if(r.width>=W*.85&&r.height>=H*.4){
+          e.style.setProperty('background-image','none','important');
+          e.style.setProperty('background-color','transparent','important');
+        }
+      }
+    });
+  }catch(x){}
+}
+nero();[300,1000,2500,6000].forEach(function(t){setTimeout(nero,t);});
+addEventListener('resize',function(){setTimeout(nero,150);});
+})();
+</script>
 
 </body>
 </html>
