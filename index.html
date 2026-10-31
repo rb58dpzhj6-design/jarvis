@@ -1481,6 +1481,86 @@ if(typeof window.ask==='function'){
 }
 })();
 </script>
+<script>
+(function(){
+function say(t){
+  try{
+    if(typeof window.speak==='function'){window.speak(t);return;}
+    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+  }catch(e){}
+}
+function chiave(){try{return localStorage.getItem('tavily')||'';}catch(e){return '';}}
+let bypass=false;
+function analizza(raw){
+  let q=String(raw||'').trim();if(!q)return null;
+  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
+  const low=q.toLowerCase().replace(/[.!?]+$/,'').trim();
+  let m=q.match(/^salva\s+(?:la\s+)?chiave\s+tavily\s*[:=]?\s*(\S+)$/i);
+  if(m)return {tipo:'chiave',k:m[1]};
+  m=low.match(/^(?:cerca|cercami|ricerca|trova|trovami)\s+(?:sul web|su internet|online|in rete|nel web)\s*(?:che\s+)?(.+)$/);
+  if(m)return {tipo:'cerca',q:m[1].trim(),news:false};
+  m=low.match(/^(?:cerca|cercami|ricerca)\s+(.+?)\s+(?:sul web|su internet|online|in rete)$/);
+  if(m)return {tipo:'cerca',q:m[1].trim(),news:false};
+  m=low.match(/^(?:dammi\s+)?(?:le\s+)?(?:ultime notizie|notizie recenti|ultime novità)\s+(?:su|di|sul|sulla|sui|sugli|riguardo)\s+(.+)$/);
+  if(m)return {tipo:'cerca',q:m[1].trim(),news:true};
+  return null;
+}
+async function esegui(a){
+  if(a.tipo==='chiave'){
+    try{localStorage.setItem('tavily',a.k);}catch(e){}
+    say('Chiave salvata, signore. Ora può chiedermi di cercare sul web.');return null;
+  }
+  const k=chiave();
+  if(!k){say('Mi manca la chiave Tavily, signore. Scriva: salva la chiave Tavily, seguita dalla chiave.');return null;}
+  say('Cerco sul web, signore.');
+  let r;
+  try{
+    r=await fetch('https://api.tavily.com/search',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},
+      body:JSON.stringify({query:a.q,max_results:5,search_depth:'basic',topic:a.news?'news':'general'})});
+  }catch(e){say('Non riesco a contattare il servizio di ricerca, signore.');return null;}
+  if(r.status===401||r.status===403){say('La chiave Tavily non è valida, signore.');return null;}
+  if(r.status===429||r.status===432||r.status===433){say('Ho finito le ricerche gratuite di questo mese, signore.');return null;}
+  if(!r.ok){say('Il servizio di ricerca ha dato errore, signore.');return null;}
+  let j;try{j=await r.json();}catch(e){say('Risposta di ricerca non valida, signore.');return null;}
+  const ris=(j.results||[]).slice(0,5);
+  if(!ris.length){say('Non ho trovato nulla, signore.');return null;}
+  const fonti=ris.map(function(x,i){
+    let d='';try{d=new URL(x.url).hostname.replace(/^www\./,'');}catch(e){}
+    return (i+1)+') '+(x.title||'')+' ('+d+'): '+String(x.content||'').replace(/\s+/g,' ').slice(0,320);
+  }).join('\n');
+  return 'Rispondi in italiano, in modo breve e chiaro, usando solo queste fonti web recenti e citando il nome del sito. Domanda: '+a.q+'\nFonti:\n'+fonti;
+}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sendBtn=document.getElementById('send');
+async function lancia(i,a){
+  const testo=await esegui(a);
+  if(!testo)return;
+  i.value=testo;bypass=true;
+  try{if(sendBtn)sendBtn.click();else i.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));}finally{setTimeout(function(){bypass=false;},50);}
+}
+function gestisci(ev,i){
+  if(bypass||!i)return;
+  const a=analizza(i.value);if(!a)return;
+  ev.stopImmediatePropagation();ev.preventDefault();
+  i.value='';lancia(i,a);
+}
+if(sendBtn){
+  sendBtn.addEventListener('click',function(ev){gestisci(ev,grabInput());},true);
+}
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter'||bypass)return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  gestisci(ev,i);
+},true);
+if(typeof window.ask==='function'){
+  const _ask=window.ask;
+  window.ask=function(q){
+    if(!bypass&&typeof q==='string'){const a=analizza(q);if(a){esegui(a).then(function(t){if(t){bypass=true;try{_ask.call(window,t);}finally{bypass=false;}}});return;}}
+    return _ask.apply(this,arguments);
+  };
+}
+})();
+</script>
 
 </body>
 </html>
