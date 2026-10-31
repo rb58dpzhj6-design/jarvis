@@ -1688,6 +1688,19 @@ window.ask=function(q){
 };
 })();
 </script>
+<script>
+(function(){
+function aj(){
+  const t=document.getElementById('text'),tap=document.getElementById('hvTap');
+  if(!t||!tap)return;
+  if(t.querySelector('.jcode')){
+    const over=Math.max(0,tap.getBoundingClientRect().bottom-t.getBoundingClientRect().top);
+    tap.style.setProperty('clip-path','inset(0 0 '+over+'px 0)');
+  }else tap.style.removeProperty('clip-path');
+}
+setInterval(aj,300);
+})();
+</script>
 
 </body>
 </html>
