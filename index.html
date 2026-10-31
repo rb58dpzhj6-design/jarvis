@@ -1419,6 +1419,68 @@ if(typeof window.ask==='function'){
 }
 })();
 </script>
+<script>
+(function(){
+const KEY='contatti';
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||'{}');}catch(e){return {};}}
+function save(o){try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){}}
+function say(t){
+  try{
+    if(typeof window.speak==='function'){window.speak(t);return;}
+    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+  }catch(e){}
+}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function num(s){const p=/^\s*\+/.test(s)?'+':'';return p+String(s).replace(/\D/g,'');}
+function chiama(n,nome){
+  say('Chiamo '+nome+', signore.');
+  setTimeout(function(){location.href='tel:'+n;},1500);
+}
+function handle(raw){
+  let q=String(raw||'').trim();if(!q)return false;
+  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
+  const low=q.toLowerCase().replace(/[.!?]+$/,'').trim();
+  let m;
+  m=low.match(/^(?:salva|memorizza|registra)\s+(?:il\s+)?(?:numero|contatto)?\s*(?:di\s+)?(.+?)\s+((?:\+|00)?\d[\d\s.\-]{5,})$/);
+  if(m){
+    const nome=m[1].replace(/^(di|a)\s+/,'').trim(),n=num(m[2].replace(/^00/,'+'));
+    if(nome&&n.replace(/\D/g,'').length>=6){const c=load();c[nome]=n;save(c);say('Fatto, signore. Ho salvato '+cap(nome)+'.');return true;}
+  }
+  m=low.match(/^(?:chiama|chiamami|telefona(?:\s+a)?|fai una telefonata a|fai una chiamata a)\s+(.+)$/);
+  if(m){
+    const w=m[1].replace(/^(a|il|la)\s+/,'').trim();
+    if(/^[+\d][\d\s.\-]{5,}$/.test(w)){chiama(num(w),'il numero');return true;}
+    const c=load(),k=Object.keys(c).find(x=>x===w)||Object.keys(c).find(x=>x.includes(w)||w.includes(x));
+    if(k){chiama(c[k],cap(k));return true;}
+    say('Non ho il numero di '+w+', signore. Dica: salva il numero di '+w+', seguito dal numero.');return true;
+  }
+  if(/^(quali|che|elenco|mostra|dimmi|leggi|elencami)\b/.test(low)&&/\b(contatti|rubrica|numeri salvati)\b/.test(low)){
+    const k=Object.keys(load());
+    say(k.length?'Ho salvato: '+k.map(cap).join(', ')+'.':'Non ho ancora nessun contatto, signore.');return true;
+  }
+  m=low.match(/^(?:elimina|cancella|togli|rimuovi)\s+(?:il\s+)?(?:contatto|numero)\s+(?:di\s+)?(.+)$/);
+  if(m){const c=load(),k=Object.keys(c).find(x=>x.includes(m[1].trim()));if(k){delete c[k];save(c);say('Contatto eliminato, signore.');}else say('Non trovo questo contatto, signore.');return true;}
+  return false;
+}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sendBtn=document.getElementById('send');
+if(sendBtn){
+  sendBtn.addEventListener('click',function(ev){
+    const i=grabInput();if(!i)return;
+    if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+  },true);
+}
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter')return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+if(typeof window.ask==='function'){
+  const _ask=window.ask;
+  window.ask=function(q){if(typeof q==='string'&&handle(q))return;return _ask.apply(this,arguments);};
+}
+})();
+</script>
 
 </body>
 </html>
