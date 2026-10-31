@@ -1561,6 +1561,20 @@ if(typeof window.ask==='function'){
 }
 })();
 </script>
+<script>
+(function(){
+const INI='Rispondi in italiano, in modo breve e chiaro, usando solo queste fonti web recenti';
+function pulisci(root){
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){
+    const t=n.nodeValue;if(!t||t.indexOf(INI)<0)continue;
+    const m=t.match(/Domanda:\s*(.*?)\s*Fonti:/s);
+    n.nodeValue='« Ricerca sul web: '+(m?m[1].trim():'')+' »';
+  }
+}
+new MutationObserver(function(){pulisci(document.body);}).observe(document.body,{childList:true,subtree:true,characterData:true});
+})();
+</script>
 
 </body>
 </html>
