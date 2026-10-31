@@ -1481,23 +1481,6 @@ if(typeof window.ask==='function'){
 }
 })();
 </script>
-<script>
-(function(){
-try{if(sessionStorage.getItem('avvio'))return;sessionStorage.setItem('avvio','1');}catch(e){}
-const o=document.createElement('div');
-o.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity 1s ease;opacity:1;font-family:ui-monospace,Menlo,monospace';
-o.innerHTML='<div style="color:#bfe6ff;letter-spacing:.55em;font-size:15px;padding-left:.55em;opacity:0;animation:avA 1.2s .4s forwards">J.A.R.V.I.S.</div>'
-+'<div style="width:min(60vw,220px);height:1px;background:rgba(120,200,255,.18);overflow:hidden"><div style="height:100%;width:100%;background:#38e8ff;transform:translateX(-100%);animation:avB 2.6s .8s ease-in-out forwards"></div></div>'
-+'<div style="color:#38e8ff;letter-spacing:.3em;font-size:10px;padding-left:.3em;opacity:0;animation:avA 1s 3.2s forwards">SISTEMI ONLINE</div>';
-const s=document.createElement('style');
-s.textContent='@keyframes avA{to{opacity:.9}}@keyframes avB{to{transform:translateX(0)}}';
-document.head.appendChild(s);document.body.appendChild(o);
-let fine=false;
-function chiudi(){if(fine)return;fine=true;o.style.opacity='0';setTimeout(function(){o.remove();s.remove();},1100);}
-o.addEventListener('click',chiudi);
-setTimeout(chiudi,5400);
-})();
-</script>
 
 </body>
 </html>
