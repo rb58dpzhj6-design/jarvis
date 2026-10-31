@@ -1575,6 +1575,119 @@ function pulisci(root){
 new MutationObserver(function(){pulisci(document.body);}).observe(document.body,{childList:true,subtree:true,characterData:true});
 })();
 </script>
+<script>
+(function(){
+const SYSC=function(){
+  const base='Sei Jarvis, un assistente personale elegante e ironico, e sai programmare molto bene. Rispondi sempre in italiano. Oggi è '+new Date().toLocaleString('it-IT')+'. '
+   +'Quando ti chiedono codice: scrivi il codice completo e funzionante dentro UN solo blocco ```linguaggio ... ```, con commenti brevi in italiano. Prima del blocco al massimo una frase. Dopo il blocco 1-3 frasi parlate, senza elenchi, che spiegano come usarlo. Niente altra formattazione markdown fuori dal blocco. Se la richiesta è ambigua, scegli la soluzione più semplice e dillo.';
+  return base+(typeof persona==='function'?persona():'');
+};
+let ultimo=0;
+function isCodice(q){
+  const t=String(q||'').toLowerCase().trim();
+  if(!t||window._foto)return false;
+  if(/^(?:jarvis[,:]?\s+)?(ricorda|memorizza|dimentica|mostrami|mostra|cerca|chiama|salva|appunta|aggiungi|segna|metti)\b/.test(t))return false;
+  const nomi=/\b(codice|script|funzione|programma|classe|query|sql|python|javascript|html|css|java|typescript|php|bash|regex|react|node|algoritmo|snippet|bug|c\+\+|c#|swift|kotlin|api)\b/;
+  const verbi=/\b(scrivi|scrivimi|crea|creami|genera|generami|programma|programmami|fammi|sviluppa|implementa|correggi|correggimi|sistema|debug|ottimizza|converti|riscrivi|completa|commenta)\b/;
+  if(verbi.test(t)&&nomi.test(t))return true;
+  if(/```/.test(q))return true;
+  if(t.length>50&&/(function\s*\(|=>|\bdef\s+\w+\(|\bimport\s+\w+|<\/?\w+>|[{};]\s*$)/m.test(t)&&/\b(correggi|sistema|spiega|perché|errore|ottimizza|debug|cosa fa)\b/.test(t))return true;
+  if(Date.now()-ultimo<5*60*1000&&/\b(codice|funzione|script|programma|versione|riga|errore|bug)\b/.test(t))return true;
+  return false;
+}
+async function gemini(q){
+  const model=store.get('model')||'gemini-3.5-flash-lite';
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+encodeURIComponent(store.get('key'));
+  const body=JSON.stringify({systemInstruction:{parts:[{text:SYSC()}]},contents:history.slice(-20),generationConfig:{temperature:.4,maxOutputTokens:8192}});
+  let err='';
+  for(let i=0;i<2;i++){
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body});
+    const j=await r.json().catch(function(){return {};});
+    if(r.ok){
+      const c=j.candidates&&j.candidates[0]&&j.candidates[0].content;
+      const a=c&&c.parts?c.parts.map(function(p){return p.text||'';}).join('').trim():'';
+      if(a)return a;
+      throw new Error('nessuna risposta dal modello');
+    }
+    err=(j.error&&j.error.message)||r.status;
+    if(r.status!==429&&r.status!==503)break;
+    await new Promise(function(z){setTimeout(z,1500);});
+  }
+  throw new Error(err);
+}
+function copia(testo,el){
+  function ok(){const c=el.querySelector('.jc-i');if(c){c.textContent='Copiato ✓';setTimeout(function(){c.textContent='Tocca il codice per copiarlo';},1800);}}
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(testo).then(ok,function(){fallback();});return;}
+  }catch(e){}
+  fallback();
+  function fallback(){
+    try{
+      const ta=document.createElement('textarea');ta.value=testo;ta.style.cssText='position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,testo.length);
+      const done=document.execCommand('copy');ta.remove();if(done)ok();
+    }catch(e){}
+  }
+}
+function mostra(a){
+  const box=$('text');box.textContent='';
+  const parti=a.split('```');
+  const parlato=[];
+  parti.forEach(function(p,i){
+    if(i%2===0){
+      const t=p.trim();if(!t)return;
+      const d=document.createElement('div');d.textContent=t;d.style.cssText='margin:6px 0;font-size:16px;line-height:1.4';
+      box.appendChild(d);parlato.push(t.replace(/[*_#`]/g,''));
+    }else{
+      let l=p.replace(/^[ \t]*([A-Za-z0-9+#.\-]*)[ \t]*\n/,'');
+      const lingua=(p.match(/^[ \t]*([A-Za-z0-9+#.\-]*)[ \t]*\n/)||[])[1]||'';
+      const codice=l.replace(/\s+$/,'');
+      const w=document.createElement('div');w.className='jcode';w.style.cssText='text-align:left;margin:8px 0';
+      const pre=document.createElement('pre');
+      pre.textContent=codice;
+      pre.style.cssText='margin:0;padding:10px;background:#00101f;border:1px solid #1d4a63;border-radius:10px;color:#cff4ff;font:12px/1.45 ui-monospace,Menlo,monospace;white-space:pre;overflow:auto;max-height:36vh;-webkit-overflow-scrolling:touch;tab-size:2';
+      const info=document.createElement('div');info.className='jc-i';info.textContent='Tocca il codice per copiarlo';
+      info.style.cssText='font:10px ui-monospace,Menlo,monospace;letter-spacing:1.5px;text-transform:uppercase;opacity:.65;margin-top:4px;text-align:center';
+      if(lingua){const lb=document.createElement('div');lb.textContent=lingua;lb.style.cssText='font:10px ui-monospace,Menlo,monospace;letter-spacing:1.5px;text-transform:uppercase;opacity:.65;margin-bottom:3px';w.appendChild(lb);}
+      pre.addEventListener('click',function(){copia(codice,w);});
+      w.append(pre,info);box.appendChild(w);
+    }
+  });
+  if(!box.querySelector('.jcode')){box.textContent=a;}
+  return parlato.join(' ');
+}
+const css=document.createElement('style');css.textContent='#text.codice{max-height:62%!important}';
+document.head.appendChild(css);
+new MutationObserver(function(){
+  const t=$('text');const ha=!!t.querySelector('.jcode');
+  if(t.classList.contains('codice')!==ha)t.classList.toggle('codice',ha);
+}).observe($('text'),{childList:true,subtree:true,characterData:true});
+async function esegui(q){
+  if(!store.get('key')){config();if(!store.get('key'))return;}
+  setState('thinking');
+  $('text').textContent='Scrivo il codice…';
+  history.push({role:'user',parts:[{text:q}]});
+  try{
+    const a=await gemini(q);
+    history.push({role:'model',parts:[{text:a}]});
+    const spiegazione=mostra(a);
+    ultimo=Date.now();
+    let s='Ecco il codice, signore. È sullo schermo: tocchi per copiarlo.';
+    if(spiegazione){let c=spiegazione.slice(0,260);const i=Math.max(c.lastIndexOf('. '),c.lastIndexOf('! '),c.lastIndexOf('? '));if(spiegazione.length>260&&i>80)c=c.slice(0,i+1);s=c+' Il codice è sullo schermo.';}
+    speak(s);
+  }catch(e){
+    history.pop();
+    $('text').textContent='Errore: '+e.message;
+    setState('idle');
+  }
+}
+const ask0=window.ask;
+window.ask=function(q){
+  if(typeof q==='string'&&isCodice(q)){return esegui(q);}
+  return ask0.apply(this,arguments);
+};
+})();
+</script>
 
 </body>
 </html>
