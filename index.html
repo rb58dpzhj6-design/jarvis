@@ -1575,6 +1575,60 @@ function pulisci(root){
 new MutationObserver(function(){pulisci(document.body);}).observe(document.body,{childList:true,subtree:true,characterData:true});
 })();
 </script>
+<script>
+(function(){
+function say(t){
+  try{
+    if(typeof window.speak==='function'){window.speak(t);return;}
+    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=.95;u.pitch=.9;speechSynthesis.speak(u);
+  }catch(e){}
+}
+function analizza(raw){
+  let q=String(raw||'').trim();if(!q)return null;
+  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
+  const low=q.replace(/[.!?]+$/,'').trim();
+  const m=low.match(/^(?:genera|generami|crea|creami|disegna|disegnami|fai|fammi|realizza|mostrami)\s+(?:un'|una|un|l'|lo|la|il|delle|dei)?\s*(?:immagine|immagini|foto|disegno|illustrazione|quadro)\s*(?:di|del|della|dello|dell'|dei|delle|con|su|raffigurante)?\s*(.+)$/i);
+  return m&&m[1].trim().length>=3?m[1].trim():null;
+}
+let ov=null,busy=false;
+function chiudi(){if(ov){ov.remove();ov=null;}busy=false;}
+function mostra(desc){
+  if(busy)return;busy=true;
+  say('Creo l\'immagine, signore.');
+  ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:2147482000;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px;box-sizing:border-box;font-family:ui-monospace,Menlo,monospace;color:#bfe6ff';
+  const st=document.createElement('div');st.textContent='GENERO L\'IMMAGINE…';st.style.cssText='letter-spacing:.3em;font-size:11px;color:#38e8ff';
+  const im=document.createElement('img');
+  im.style.cssText='display:none;max-width:100%;max-height:78vh;border-radius:10px;border:1px solid rgba(120,200,255,.4)';
+  const cap=document.createElement('div');cap.textContent=desc;cap.style.cssText='font-size:12px;opacity:.7;text-align:center;max-width:92%;display:none';
+  ov.append(st,im,cap);document.body.appendChild(ov);
+  ov.addEventListener('click',chiudi);
+  const mio=ov;let fatto=false;
+  const t=setTimeout(function(){if(!fatto&&ov===mio){st.textContent='NON RIESCO A CREARLA. TOCCA PER CHIUDERE.';say('Non riesco a creare l\'immagine ora, signore.');}},70000);
+  im.onload=function(){fatto=true;clearTimeout(t);st.style.display='none';im.style.display='block';cap.style.display='block';say('Ecco l\'immagine, signore. Tocchi per chiudere.');};
+  im.onerror=function(){fatto=true;clearTimeout(t);st.textContent='ERRORE. RIPROVI TRA UN MINUTO. TOCCA PER CHIUDERE.';say('Il servizio immagini non risponde, signore. Riprovi tra un minuto.');};
+  im.src='https://image.pollinations.ai/prompt/'+encodeURIComponent(desc)+'?width=768&height=768&nologo=true&seed='+Math.floor(Math.random()*1e6);
+}
+function handle(raw){const d=analizza(raw);if(!d)return false;mostra(d);return true;}
+function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
+const sendBtn=document.getElementById('send');
+if(sendBtn){
+  sendBtn.addEventListener('click',function(ev){
+    const i=grabInput();if(!i)return;
+    if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+  },true);
+}
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter')return;
+  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
+  if(handle(i.value)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';}
+},true);
+if(typeof window.ask==='function'){
+  const _ask=window.ask;
+  window.ask=function(q){if(typeof q==='string'&&handle(q))return;return _ask.apply(this,arguments);};
+}
+})();
+</script>
 
 </body>
 </html>
