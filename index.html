@@ -1734,184 +1734,6 @@ function css(){
     '#holoVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.32;transform:scaleX(-1)}'+
     '#holoCv{position:absolute;inset:0;width:100%;height:100%}'+
     '#holoClose{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:2;width:42px;height:42px;border-radius:50%;background:rgba(10,166,214,.25);border:1px solid #0aa6d6;color:#cff4ff;font-size:20px;line-height:40px;text-align:center}'+
-    '#holoMsg{position:absolute;bottom:max(22px,env(safe-area-inset-bottom));left:16px;right:16px;text-align:center;color:#9fe8ff;font-size:13px;letter-spacing:.03em;opacity:.85}';
-  document.head.appendChild(st);
-}
-function build(){
-  css();
-  overlay=document.createElement('div');overlay.id='holoWrap';
-  overlay.innerHTML='<video id="holoVideo" playsinline muted></video><canvas id="holoCv"></canvas><div id="holoClose">\u2715</div><div id="holoMsg">Muova la mano davanti alla fotocamera. Tocchi lo schermo per uscire.</div>';
-  document.body.appendChild(overlay);
-  video=overlay.querySelector('#holoVideo');
-  canvas=overlay.querySelector('#holoCv');
-  ctx=canvas.getContext('2d');
-  overlay.addEventListener('click',close);
-  window.addEventListener('resize',resize);
-}
-function resize(){
-  if(!canvas)return;
-  const d=Math.min(devicePixelRatio||1,2);
-  canvas.width=innerWidth*d;canvas.height=innerHeight*d;
-  ctx.setTransform(d,0,0,d,0,0);
-}
-function draw(){
-  rafId=requestAnimationFrame(draw);
-  if(!ctx)return;
-  const W=innerWidth,H=innerHeight;
-  ctx.clearRect(0,0,W,H);
-  const cx=W/2,cy=H/2;
-  const r=Math.min(W,H)*.18*scale;
-  rot+=0.01+(lastLandmarks?0.02:0);
-  ctx.save();
-  ctx.translate(cx,cy);
-  ctx.rotate(rot);
-  ctx.strokeStyle='rgba(127,227,255,.85)';
-  ctx.lineWidth=1.3;
-  ctx.shadowColor='#7fe3ff';ctx.shadowBlur=16;
-  const pts=12;
-  for(let ring=0;ring<3;ring++){
-    const rr=r*(0.55+ring*0.23);
-    ctx.beginPath();
-    for(let i=0;i<=pts;i++){
-      const a=(i/pts)*Math.PI*2;
-      const x=Math.cos(a)*rr,y=Math.sin(a)*rr*0.42+(ring-1)*r*0.3;
-      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-  if(lastLandmarks){
-    for(let i=0;i<lastLandmarks.length;i++){
-      const lm=lastLandmarks[i];
-      const x=(1-lm.x)*W,y=lm.y*H;
-      ctx.beginPath();
-      ctx.fillStyle='rgba(10,230,255,.9)';
-      ctx.shadowColor='#0ae6ff';ctx.shadowBlur=10;
-      ctx.arc(x,y,4,0,Math.PI*2);
-      ctx.fill();
-    }
-  }
-}
-function onResults(res){
-  if(res&&res.multiHandLandmarks&&res.multiHandLandmarks.length){
-    const lm=res.multiHandLandmarks[0];
-    lastLandmarks=lm;
-    const dx=lm[4].x-lm[8].x,dy=lm[4].y-lm[8].y;
-    const dist=Math.sqrt(dx*dx+dy*dy);
-    scale=Math.max(.6,Math.min(1.8,1+(0.25-dist)*4));
-  }else{
-    lastLandmarks=null;
-  }
-}
-async function start(){
-  if(overlay&&overlay.classList.contains('on'))return;
-  if(!overlay)build();
-  overlay.classList.add('on');
-  overlay.querySelector('#holoMsg').textContent='Muova la mano davanti alla fotocamera. Tocchi lo schermo per uscire.';
-  resize();
-  if(!rafId)draw();
-  say('Attivo l\'ologramma, signore.');
-  try{
-    await ensureHands();
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
-    video.srcObject=stream;
-    await video.play();
-    hands=new window.Hands({locateFile:function(f){return MP_BASE+f;}});
-    hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.5});
-    hands.onResults(onResults);
-    sendLoopOn=true;
-    const loop=async function(){
-      if(!sendLoopOn)return;
-      if(video.readyState>=2){try{await hands.send({image:video});}catch(e){}}
-      if(sendLoopOn)requestAnimationFrame(loop);
-    };
-    loop();
-  }catch(e){
-    const m=overlay.querySelector('#holoMsg');
-    if(m)m.textContent='Non riesco ad accedere alla fotocamera, signore.';
-    say('Non riesco ad accedere alla fotocamera, signore.');
-  }
-}
-function close(){
-  if(overlay)overlay.classList.remove('on');
-  sendLoopOn=false;
-  if(rafId){cancelAnimationFrame(rafId);rafId=null;}
-  lastLandmarks=null;
-  if(video&&video.srcObject){
-    video.srcObject.getTracks().forEach(function(t){t.stop();});
-    video.srcObject=null;
-  }
-}
-let bypass=false;
-function norm(raw){
-  let q=String(raw||'').trim();
-  q=q.replace(/^(ehi\s+|ciao\s+)?(jarvis|giarvis|jarvys|garvis)[\s,.:;!?-]*/i,'');
-  return q.toLowerCase().replace(/[.!?]+$/,'').trim();
-}
-function isOpen(raw){return /^(mostra|apri|attiva)\s+(l'|lo\s+|il\s+)?ologramma$/i.test(norm(raw));}
-function isClose(raw){return /^(chiudi|spegni|nascondi)\s+(l'|lo\s+|il\s+)?ologramma$/i.test(norm(raw));}
-function grabInput(){return document.querySelector('input[type=text]:not(#agI),input:not([type]):not(#agI),textarea');}
-const sendBtn=document.getElementById('send');
-function gestisci(ev,i){
-  if(bypass||!i)return;
-  const v=i.value;
-  if(isOpen(v)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';start();return;}
-  if(isClose(v)){ev.stopImmediatePropagation();ev.preventDefault();i.value='';close();return;}
-}
-if(sendBtn)sendBtn.addEventListener('click',function(ev){gestisci(ev,grabInput());},true);
-document.addEventListener('keydown',function(ev){
-  if(ev.key!=='Enter'||bypass)return;
-  const i=ev.target;if(!i||i.id==='agI'||!/^(INPUT|TEXTAREA)$/.test(i.tagName))return;
-  gestisci(ev,i);
-},true);
-if(typeof window.ask==='function'){
-  const _ask=window.ask;
-  window.ask=function(q){
-    if(typeof q==='string'){
-      if(isOpen(q)){start();return;}
-      if(isClose(q)){close();return;}
-    }
-    return _ask.apply(this,arguments);
-  };
-}
-document.addEventListener('keydown',function(ev){
-  if(ev.key==='Escape'&&overlay&&overlay.classList.contains('on'))close();
-});
-})();
-</script>
-<script>
-(function(){
-if(window.__holo)return;window.__holo=1;
-function say(t){
-  try{
-    if(typeof window.speak==='function'){window.speak(t);return;}
-    const u=new SpeechSynthesisUtterance(t);u.lang='it-IT';speechSynthesis.speak(u);
-  }catch(e){}
-}
-function loadScript(src){
-  return new Promise(function(res,rej){
-    const s=document.createElement('script');
-    s.src=src;s.onload=res;s.onerror=function(){rej(new Error('lib non caricata'));};
-    document.head.appendChild(s);
-  });
-}
-const MP_BASE='https://cdn.jsdelivr.net/npm/@mediapipe/hands/';
-function ensureHands(){
-  if(window.Hands)return Promise.resolve();
-  return loadScript(MP_BASE+'hands.js');
-}
-let overlay=null,video=null,canvas=null,ctx=null,hands=null,rafId=null,sendLoopOn=false;
-let lastLandmarks=null,rot=0,scale=1;
-function css(){
-  if(document.getElementById('holoCss'))return;
-  const st=document.createElement('style');
-  st.id='holoCss';
-  st.textContent=
-    '#holoWrap{position:fixed;inset:0;z-index:99999;background:#000;display:none}'+
-    '#holoWrap.on{display:block}'+
-    '#holoVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.32;transform:scaleX(-1)}'+
-    '#holoCv{position:absolute;inset:0;width:100%;height:100%}'+
-    '#holoClose{position:absolute;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:2;width:42px;height:42px;border-radius:50%;background:rgba(10,166,214,.25);border:1px solid #0aa6d6;color:#cff4ff;font-size:20px;line-height:40px;text-align:center}'+
     '#holoMsg{position:absolute;bottom:max(22px,env(safe-area-inset-bottom));left:16px;right:16px;text-align:center;color:#9fe8ff;font-size:13px;letter-spacing:.03em;opacity:.85}'+
     '#holoStatus{position:absolute;top:max(14px,env(safe-area-inset-top));left:max(14px,env(safe-area-inset-left));color:#7fe3ff;font-size:12px;letter-spacing:.05em;background:rgba(0,20,30,.5);padding:6px 10px;border-radius:8px}';
   document.head.appendChild(st);
@@ -1936,10 +1758,12 @@ function resize(){
 function draw(){
   rafId=requestAnimationFrame(draw);
   if(!ctx)return;
+  try{
   const W=innerWidth,H=innerHeight;
   ctx.clearRect(0,0,W,H);
   const cx=W/2,cy=H/2;
-  const r=Math.min(W,H)*.3*scale;
+  if(!isFinite(scale)||scale<=0)scale=1;
+  const r=Math.max(1,Math.min(W,H)*.3*scale);
   rot+=0.012+(lastLandmarks?0.025:0);
   ctx.save();
   ctx.translate(cx,cy);
@@ -1967,6 +1791,7 @@ function draw(){
   if(lastLandmarks){
     for(let i=0;i<lastLandmarks.length;i++){
       const lm=lastLandmarks[i];
+      if(!lm||!isFinite(lm.x)||!isFinite(lm.y))continue;
       const x=(1-lm.x)*W,y=lm.y*H;
       ctx.beginPath();
       ctx.fillStyle='rgba(10,230,255,.95)';
@@ -1977,14 +1802,18 @@ function draw(){
   }
   const st=document.getElementById('holoStatus');
   if(st)st.textContent=lastLandmarks?'\u25CF Mano rilevata':'Nessuna mano rilevata';
+  }catch(e){try{ctx.restore();}catch(e2){}}
 }
 function onResults(res){
   if(res&&res.multiHandLandmarks&&res.multiHandLandmarks.length){
     const lm=res.multiHandLandmarks[0];
     lastLandmarks=lm;
-    const dx=lm[4].x-lm[8].x,dy=lm[4].y-lm[8].y;
-    const dist=Math.sqrt(dx*dx+dy*dy);
-    scale=Math.max(.6,Math.min(1.8,1+(0.25-dist)*4));
+    try{
+      const dx=lm[4].x-lm[8].x,dy=lm[4].y-lm[8].y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const s=Math.max(.6,Math.min(1.8,1+(0.25-dist)*4));
+      if(isFinite(s))scale=s;
+    }catch(e){}
   }else{
     lastLandmarks=null;
   }
