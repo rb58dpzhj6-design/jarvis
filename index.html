@@ -1740,7 +1740,7 @@ function css(){
 }
 function build(){
   css();
-  overlay=document.createElement('div');overlay.id='holoWrap';
+  overlay=document.createElement('div');overlay.id='holoWrap';overlay.setAttribute('data-hv','1');
   overlay.innerHTML='<video id="holoVideo" playsinline muted></video><canvas id="holoCv"></canvas><div id="holoClose">\u2715</div><div id="holoStatus">Avvio\u2026</div><div id="holoMsg">Muova la mano davanti alla fotocamera. Tocchi lo schermo per uscire.</div>';
   document.body.appendChild(overlay);
   video=overlay.querySelector('#holoVideo');
