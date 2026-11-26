@@ -1724,33 +1724,7 @@ function ensureHands(){
 }
 let overlay=null,video=null,canvas=null,ctx=null,hands=null,rafId=null,sendLoopOn=false;
 let lastLandmarks=null,rot=0,scale=1;
-let offX=0,offY=0,touchScale=1,lastTouch=null,lastPinchDist=null;
-function touchDist(t1,t2){const dx=t1.clientX-t2.clientX,dy=t1.clientY-t2.clientY;return Math.sqrt(dx*dx+dy*dy);}
-function onTouchStart(e){
-  if(e.touches.length===1){lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};}
-  else if(e.touches.length===2){lastPinchDist=touchDist(e.touches[0],e.touches[1]);}
-}
-function onTouchMove(e){
-  if(e.cancelable)e.preventDefault();
-  if(e.touches.length===1&&lastTouch){
-    const t=e.touches[0];
-    offX+=t.clientX-lastTouch.x;
-    offY+=t.clientY-lastTouch.y;
-    lastTouch={x:t.clientX,y:t.clientY};
-  }else if(e.touches.length===2){
-    const d=touchDist(e.touches[0],e.touches[1]);
-    if(lastPinchDist){
-      const ratio=d/lastPinchDist;
-      const s=touchScale*ratio;
-      if(isFinite(s))touchScale=Math.max(.4,Math.min(3,s));
-    }
-    lastPinchDist=d;
-  }
-}
-function onTouchEnd(e){
-  if(e.touches.length===0){lastTouch=null;lastPinchDist=null;}
-  else if(e.touches.length===1){lastTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};lastPinchDist=null;}
-}
+let offX=0,offY=0,targetOffX=0,targetOffY=0;
 function css(){
   if(document.getElementById('holoCss'))return;
   const st=document.createElement('style');
@@ -1768,16 +1742,12 @@ function css(){
 function build(){
   css();
   overlay=document.createElement('div');overlay.id='holoWrap';overlay.setAttribute('data-hv','1');
-  overlay.innerHTML='<video id="holoVideo" playsinline muted></video><canvas id="holoCv"></canvas><div id="holoClose">\u2715</div><div id="holoStatus">Avvio\u2026</div><div id="holoMsg">Trascini un dito per spostare l\'ologramma, usi due dita per ingrandirlo. Tocchi la X per uscire.</div>';
+  overlay.innerHTML='<video id="holoVideo" playsinline muted></video><canvas id="holoCv"></canvas><div id="holoClose">\u2715</div><div id="holoStatus">Avvio\u2026</div><div id="holoMsg">Muova la mano davanti alla fotocamera: l\'ologramma la segue. Pizzichi pollice e indice per ingrandirlo. Tocchi la X per uscire.</div>';
   document.body.appendChild(overlay);
   video=overlay.querySelector('#holoVideo');
   canvas=overlay.querySelector('#holoCv');
   ctx=canvas.getContext('2d');
   overlay.querySelector('#holoClose').addEventListener('click',close);
-  overlay.addEventListener('touchstart',onTouchStart,{passive:true});
-  overlay.addEventListener('touchmove',onTouchMove,{passive:false});
-  overlay.addEventListener('touchend',onTouchEnd,{passive:true});
-  overlay.addEventListener('touchcancel',onTouchEnd,{passive:true});
   window.addEventListener('resize',resize);
 }
 function resize(){
@@ -1792,11 +1762,13 @@ function draw(){
   try{
   const W=innerWidth,H=innerHeight;
   ctx.clearRect(0,0,W,H);
+  if(!isFinite(targetOffX))targetOffX=0;if(!isFinite(targetOffY))targetOffY=0;
   if(!isFinite(offX))offX=0;if(!isFinite(offY))offY=0;
-  if(!isFinite(touchScale)||touchScale<=0)touchScale=1;
+  offX+=(targetOffX-offX)*0.18;
+  offY+=(targetOffY-offY)*0.18;
   const cx=W/2+offX,cy=H/2+offY;
   if(!isFinite(scale)||scale<=0)scale=1;
-  const r=Math.max(1,Math.min(W,H)*.3*scale*touchScale);
+  const r=Math.max(1,Math.min(W,H)*.3*scale);
   rot+=0.012+(lastLandmarks?0.025:0);
   ctx.save();
   ctx.translate(cx,cy);
@@ -1847,6 +1819,14 @@ function onResults(res){
       const s=Math.max(.6,Math.min(1.8,1+(0.25-dist)*4));
       if(isFinite(s))scale=s;
     }catch(e){}
+    try{
+      const palm=lm[9];
+      if(palm&&isFinite(palm.x)&&isFinite(palm.y)){
+        const W=innerWidth,H=innerHeight;
+        const hx=(1-palm.x)*W-W/2,hy=palm.y*H-H/2;
+        if(isFinite(hx)&&isFinite(hy)){targetOffX=hx;targetOffY=hy;}
+      }
+    }catch(e){}
   }else{
     lastLandmarks=null;
   }
@@ -1855,8 +1835,8 @@ async function start(){
   if(overlay&&overlay.classList.contains('on'))return;
   if(!overlay)build();
   overlay.classList.add('on');
-  overlay.querySelector('#holoMsg').textContent='Trascini un dito per spostare l\'ologramma, usi due dita per ingrandirlo. Tocchi la X per uscire.';
-  offX=0;offY=0;touchScale=1;
+  overlay.querySelector('#holoMsg').textContent='Muova la mano davanti alla fotocamera: l\'ologramma la segue. Pizzichi pollice e indice per ingrandirlo. Tocchi la X per uscire.';
+  offX=0;offY=0;targetOffX=0;targetOffY=0;
   resize();
   if(!rafId)draw();
   say('Attivo l\'ologramma, signore.');
@@ -1936,6 +1916,5 @@ document.addEventListener('keydown',function(ev){
 });
 })();
 </script>
-
 </body>
 </html>
